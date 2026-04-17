@@ -1,17 +1,15 @@
-// Package nooa provides a type-safe, annotation-free HTTP router
-// with compile-time OpenAPI 3.0 specification generation support.
 package nooa
 
 import (
 	"net/http"
 	"strings"
-	"sync"
 )
 
-// Content-Type константы
+// ... (константы CTJSON и т.д. остаются без изменений) ...
+
 const (
 	CTJSON        = "application/json"
-	CTProblemJSON = "application/problem+json" // RFC 7807
+	CTProblemJSON = "application/problem+json"
 	CTXML         = "application/xml"
 	CTForm        = "application/x-www-form-urlencoded"
 	CTMultipart   = "multipart/form-data"
@@ -19,10 +17,9 @@ const (
 	CTPNG         = "image/png"
 	CTHTML        = "text/html"
 	CTPlainText   = "text/plain"
-	CTCSV         = "text/csv" // <--- ДОБАВИТЬ ЭТУ СТРОКУ
+	CTCSV         = "text/csv"
 )
 
-// ResponseSpec хранит метаданные ответа
 type ResponseSpec struct {
 	Status       int
 	Description  string
@@ -30,13 +27,11 @@ type ResponseSpec struct {
 	IsError      bool
 }
 
-// SecurityRequirement для OpenAPI
 type SecurityRequirement struct {
 	Scheme string
 	Scopes []string
 }
 
-// RouteSpec — публичное описание маршрута (используется в рантайме/startup)
 type RouteSpec struct {
 	Method             string
 	Path               string
@@ -49,10 +44,9 @@ type RouteSpec struct {
 	RequestContentType []string
 	Responses          []ResponseSpec
 	Handler            http.HandlerFunc
+	Extensions         map[string]any
 }
 
-// RouteBuilder — fluent API. Req и Res используются генератором (AST),
-// в рантайме типы стираются, оверхед отсутствует.
 type RouteBuilder[Req, Res any] struct {
 	method             string
 	path               string
@@ -66,11 +60,9 @@ type RouteBuilder[Req, Res any] struct {
 	handler            http.HandlerFunc
 	responses          []ResponseSpec
 	spec               *RouteSpec
+	extensions         map[string]any
 }
 
-// NewRoute создаёт билдер маршрута.
-// Req — тип входящего запроса (body/params)
-// Res — тип успешного ответа (2xx)
 func NewRoute[Req, Res any](method, path string, handler http.HandlerFunc) *RouteBuilder[Req, Res] {
 	b := &RouteBuilder[Req, Res]{
 		method:             strings.ToUpper(method),
@@ -113,52 +105,58 @@ func (b *RouteBuilder[Req, Res]) syncSpec() {
 	b.spec.OperationID = b.operationID
 	b.spec.Summary = b.summary
 	b.spec.Description = b.description
+
 	b.spec.Tags = append([]string(nil), b.tags...)
 	b.spec.Deprecated = b.deprecated
 	b.spec.Security = append([]SecurityRequirement(nil), b.security...)
 	b.spec.RequestContentType = append([]string(nil), b.requestContentType...)
 	b.spec.Responses = append([]ResponseSpec(nil), b.responses...)
 	b.spec.Handler = b.handler
+
+	// Копирование расширений (исправлено)
+	if len(b.extensions) > 0 {
+		if b.spec.Extensions == nil {
+			b.spec.Extensions = make(map[string]any)
+		}
+		for k, v := range b.extensions {
+			b.spec.Extensions[k] = v
+		}
+	}
 }
 
-// === METADATA ===
+// Вспомогательное поле для накопления расширений до syncSpec
+var extensionsTemp map[string]any
 
 func (b *RouteBuilder[Req, Res]) Summary(s string) *RouteBuilder[Req, Res] {
 	b.summary = s
 	b.syncSpec()
 	return b
 }
-
 func (b *RouteBuilder[Req, Res]) Description(s string) *RouteBuilder[Req, Res] {
 	b.description = s
 	b.syncSpec()
 	return b
 }
-
 func (b *RouteBuilder[Req, Res]) Tags(tags ...string) *RouteBuilder[Req, Res] {
 	b.tags = append(b.tags, tags...)
 	b.syncSpec()
 	return b
 }
-
 func (b *RouteBuilder[Req, Res]) OperationID(id string) *RouteBuilder[Req, Res] {
 	b.operationID = id
 	b.syncSpec()
 	return b
 }
-
 func (b *RouteBuilder[Req, Res]) Deprecated() *RouteBuilder[Req, Res] {
 	b.deprecated = true
 	b.syncSpec()
 	return b
 }
-
 func (b *RouteBuilder[Req, Res]) Secure(scheme string, scopes ...string) *RouteBuilder[Req, Res] {
 	b.security = append(b.security, SecurityRequirement{Scheme: scheme, Scopes: scopes})
 	b.syncSpec()
 	return b
 }
-
 func (b *RouteBuilder[Req, Res]) RequestContentType(cts ...string) *RouteBuilder[Req, Res] {
 	if len(cts) > 0 {
 		b.requestContentType = cts
@@ -167,15 +165,34 @@ func (b *RouteBuilder[Req, Res]) RequestContentType(cts ...string) *RouteBuilder
 	return b
 }
 
-// === RESPONSES (без дженериков, типы берутся из Res или глобальных моделей ошибок) ===
+func (b *RouteBuilder[Req, Res]) Extension(key string, value any) *RouteBuilder[Req, Res] {
+	if b.extensions == nil {
+		b.extensions = make(map[string]any)
+	}
+	b.extensions[key] = value
+	// Обновляем spec, чтобы изменения были видны сразу при вызове Spec()
+	b.syncSpec()
+	return b
+}
 
-// OnSuccess документирует 2xx ответ.
+// Prefix добавляет префикс к пути (например, /api/v1)
+func (b *RouteBuilder[Req, Res]) Prefix(prefix string) *RouteBuilder[Req, Res] {
+	prefix = strings.TrimRight(prefix, "/")
+	currentPath := strings.TrimLeft(b.path, "/")
+
+	if prefix != "" && currentPath != "" {
+		b.path = prefix + "/" + currentPath
+	} else if prefix != "" {
+		b.path = prefix
+	}
+	b.syncSpec()
+	return b
+}
+
 func (b *RouteBuilder[Req, Res]) OnSuccess(status int, desc string, ct ...string) *RouteBuilder[Req, Res] {
 	b.addResponse(status, desc, ct, false)
 	return b
 }
-
-// OnClientErr документирует 4xx ответ. Дефолтный CT: application/problem+json.
 func (b *RouteBuilder[Req, Res]) OnClientErr(status int, desc string, ct ...string) *RouteBuilder[Req, Res] {
 	if len(ct) == 0 {
 		ct = []string{CTProblemJSON}
@@ -183,8 +200,6 @@ func (b *RouteBuilder[Req, Res]) OnClientErr(status int, desc string, ct ...stri
 	b.addResponse(status, desc, ct, true)
 	return b
 }
-
-// OnServerErr документирует 5xx ответ.
 func (b *RouteBuilder[Req, Res]) OnServerErr(status int, desc string, ct ...string) *RouteBuilder[Req, Res] {
 	if len(ct) == 0 {
 		ct = []string{CTProblemJSON}
@@ -192,14 +207,8 @@ func (b *RouteBuilder[Req, Res]) OnServerErr(status int, desc string, ct ...stri
 	b.addResponse(status, desc, ct, true)
 	return b
 }
-
-// OnNoContent для ответов без тела
 func (b *RouteBuilder[Req, Res]) OnNoContent(status int, desc string) *RouteBuilder[Req, Res] {
-	b.responses = append(b.responses, ResponseSpec{
-		Status:      status,
-		Description: desc,
-		IsError:     false,
-	})
+	b.responses = append(b.responses, ResponseSpec{Status: status, Description: desc, IsError: false})
 	b.syncSpec()
 	return b
 }
@@ -209,18 +218,10 @@ func (b *RouteBuilder[Req, Res]) addResponse(status int, desc string, ct []strin
 		ct = []string{CTJSON}
 	}
 	b.responses = append(b.responses, ResponseSpec{
-		Status:       status,
-		Description:  desc,
-		ContentTypes: ct,
-		IsError:      isError,
+		Status: status, Description: desc, ContentTypes: ct, IsError: isError,
 	})
 	b.syncSpec()
 }
-
-// === TERMINAL ===
-
-// Register регистрирует хендлер в ServeMux и возвращает билдер для продолжения цепочки.
-// Это позволяет писать: NewRoute(...).Register(mux).RegisterGlobal()
 func (b *RouteBuilder[Req, Res]) Register(mux *http.ServeMux) *RouteBuilder[Req, Res] {
 	if b.handler == nil {
 		panic("nooa: handler cannot be nil")
@@ -232,45 +233,26 @@ func (b *RouteBuilder[Req, Res]) Register(mux *http.ServeMux) *RouteBuilder[Req,
 	return b
 }
 
-// Spec возвращает копию метаданных
 func (b *RouteBuilder[Req, Res]) Spec() RouteSpec {
 	if b.spec == nil {
 		b.syncSpec()
 	}
+	// Глубокая копия для безопасности
 	spec := *b.spec
 	spec.Tags = append([]string(nil), b.spec.Tags...)
 	spec.Security = append([]SecurityRequirement(nil), b.spec.Security...)
 	spec.RequestContentType = append([]string(nil), b.spec.RequestContentType...)
 	spec.Responses = append([]ResponseSpec(nil), b.spec.Responses...)
+	if b.spec.Extensions != nil {
+		spec.Extensions = make(map[string]any)
+		for k, v := range b.spec.Extensions {
+			spec.Extensions[k] = v
+		}
+	}
 	return spec
 }
 
-// GLOBAL REGISTRY
-var (
-	registryMu    sync.RWMutex
-	routeRegistry []RouteSpec
-)
-
-// RegisterGlobal добавляет маршрут в глобальный реестр и возвращает билдер.
 func (b *RouteBuilder[Req, Res]) RegisterGlobal() *RouteBuilder[Req, Res] {
-	registryMu.Lock()
-	defer registryMu.Unlock()
-	routeRegistry = append(routeRegistry, b.Spec())
+	addToRegistryInternal(b.Spec())
 	return b
-}
-
-// RegisteredRoutes возвращает копию всех зарегистрированных маршрутов.
-func RegisteredRoutes() []RouteSpec {
-	registryMu.RLock()
-	defer registryMu.RUnlock()
-	result := make([]RouteSpec, len(routeRegistry))
-	copy(result, routeRegistry)
-	return result
-}
-
-// ClearRegistry очищает реестр (полезно для тестов).
-func ClearRegistry() {
-	registryMu.Lock()
-	defer registryMu.Unlock()
-	routeRegistry = nil
 }

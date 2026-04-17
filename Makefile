@@ -1,47 +1,37 @@
-.PHONY: test build generate clean all install
+.PHONY: test gen install swagger-ui
 
-# Переменные
-BINARY_NAME=nooa
-TESTDATA_DIR=internal/openapi/testdata
-OUTPUT_FILE=$(TESTDATA_DIR)/openapi.yaml
+SWAGGER_VERSION := v5.17.14
+SWAGGER_URL := https://github.com/swagger-api/swagger-ui/archive/refs/tags/$(SWAGGER_VERSION).tar.gz
+SWAGGER_TMP_DIR := /tmp/swagger-ui-dist
+SWAGGER_DEST_DIR := static/swagger
+
+install:
+	go install github.com/arkannsk/elval/cmd/elval-gen@latest
+
+gen: install
+	go generate ./...
 
 # Запуск всех тестов
 test:
 	go test ./... -v
 
-# Сборка бинарника
-build:
-	go build -o $(BINARY_NAME) ./cmd/nooa
+swagger-ui:
+	@echo "Downloading Swagger UI $(SWAGGER_VERSION)..."
+	@rm -rf $(SWAGGER_TMP_DIR)
+	@mkdir -p $(SWAGGER_TMP_DIR)
+	@curl -sL $(SWAGGER_URL) | tar xz -C $(SWAGGER_TMP_DIR) --strip-components=1
 
-# Генерация OpenAPI спецификации из testdata
-generate: build
-	./$(BINARY_NAME) --input $(TESTDATA_DIR) --output $(OUTPUT_FILE) --title "Example API" --version "1.0.0"
-	@echo "Generated $(OUTPUT_FILE)"
+	@echo "📂 Preparing destination directory..."
+	@rm -rf $(SWAGGER_DEST_DIR)
+	@mkdir -p $(SWAGGER_DEST_DIR)
 
-# Очистка сгенерированных файлов
-clean:
-	rm -f $(BINARY_NAME)
-	rm -f $(OUTPUT_FILE)
-	go clean -testcache
+	@echo "📦 Copying distribution files..."
+	@cp -r $(SWAGGER_TMP_DIR)/dist/* $(SWAGGER_DEST_DIR)/
 
-# Всё вместе: очистка, тесты, сборка, генерация
-all: clean test build generate
+	@echo "️ Configuring index.html for local spec..."
+	@# Заменяем стандартный URL petstore на наш /openapi.json
+	@sed -i.bak 's|https://petstore.swagger.io/v2/swagger.json|/openapi.json|g' $(SWAGGER_DEST_DIR)/index.html
+	@# Удаляем backup файл, созданный sed
+	@rm -f $(SWAGGER_DEST_DIR)/index.html.bak
 
-# Установка в GOPATH/bin (опционально)
-install: build
-	go install ./cmd/nooa
-
-# Быстрый запуск тестов без кэша
-test-race:
-	go test -race ./...
-
-# Помощь
-help:
-	@echo "Доступные цели:"
-	@echo "  test          - запустить все тесты"
-	@echo "  test-race     - запустить тесты с детектором гонок"
-	@echo "  build         - собрать бинарник nooa"
-	@echo "  generate      - сгенерировать openapi.yaml из testdata"
-	@echo "  clean         - удалить сгенерированные файлы"
-	@echo "  all           - clean + test + build + generate"
-	@echo "  install       - установить nooa в GOPATH/bin"
+	@echo "Swagger UI installed successfully in $(SWAGGER_DEST_DIR)"
