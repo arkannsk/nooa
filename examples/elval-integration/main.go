@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/arkannsk/nooa"
 	"github.com/arkannsk/nooa/examples/elval-integration/models"
@@ -15,22 +16,15 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
-
 	user := models.User{
-		ID:    "usr_123",
-		Name:  req.Name,
-		Email: req.Email,
-		Age:   req.Age,
-		Role:  req.Role,
+		ID: "usr_123", Name: req.Name, Email: req.Email, Age: req.Age, Role: req.Role,
 	}
-
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(user)
 }
 
 func init() {
-	// Регистрация моделей для интеграции схем
 	nooa.RegisterModel[models.User]("User")
 	nooa.RegisterModel[models.CreateUserRequest]("CreateUserRequest")
 }
@@ -38,26 +32,44 @@ func init() {
 func main() {
 	mux := http.NewServeMux()
 
+	// 1. Регистрируем роуты
 	nooa.NewRoute[models.CreateUserRequest, models.User]("POST", "/users", createUser).
 		Summary("Register new user").
-		Description("Creates a new user account with validation based on elval annotations.").
 		Tags("Users").
 		OnSuccess(201, "User created successfully").
 		OnClientErr(400, "Validation failed").
 		Register(mux).
 		RegisterGlobal()
 
-	// Используем стандартный middleware
-	handler := nooa.SpecMiddleware(
+	// 2. Создаем цепочку обработчиков
+
+	// Сначала хендлер для Swagger UI (на пути /docs/...)
+	swaggerHandler := nooa.SwaggerUIHandler("/openapi.json")
+
+	// Затем хендлер для спецификации и основных роутов
+	apiHandler := nooa.SpecMiddleware(
 		mux,
 		nooa.Info{
 			Title:       "Elval Integration Demo",
 			Version:     "1.0.0",
-			Description: "Demonstrates nooa + elval integration with rich schemas.",
+			Description: "Interactive docs with embedded Swagger UI.",
 		},
 	)
 
-	log.Println(" Server starting on http://localhost:8080")
-	log.Println("📄 OpenAPI Spec: http://localhost:8080/openapi.json")
-	log.Fatal(http.ListenAndServe(":8080", handler))
+	// Объединяем всё в один главный хендлер
+	finalHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Если путь начинается с /docs, отдаем Swagger UI
+		if r.URL.Path == "/docs" || strings.HasPrefix(r.URL.Path, "/docs/") {
+			swaggerHandler.ServeHTTP(w, r)
+			return
+		}
+		// Иначе передаем в API хендлер (который отдаст openapi.json или проксирует в mux)
+		apiHandler.ServeHTTP(w, r)
+	})
+
+	log.Println("Server starting on http://localhost:8080")
+	log.Println("Swagger UI: http://localhost:8080/docs")
+	log.Println("Raw JSON:   http://localhost:8080/openapi.json")
+
+	log.Fatal(http.ListenAndServe(":8080", finalHandler))
 }

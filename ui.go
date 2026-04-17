@@ -2,42 +2,56 @@ package nooa
 
 import (
 	"embed"
+	"io"
+	"log"
 	"net/http"
 	"strings"
-	"time"
 )
 
 //go:embed static/swagger/*
 var swaggerFS embed.FS
 
 // SwaggerUIHandler возвращает HTTP-хендлер для отдачи Swagger UI.
-// Он обслуживает файлы из встроенной файловой системы и перенаправляет запросы на specURL.
 func SwaggerUIHandler(specURL string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 
-		// Если запрос на корень документации, редиректим на index.html
+		// Редирект с /docs на /docs/index.html
 		if path == "/docs" || path == "/docs/" {
 			http.Redirect(w, r, "/docs/index.html", http.StatusFound)
 			return
 		}
 
-		// Убираем префикс /docs/ для поиска файла в FS
+		// Обработка статических файлов
 		if strings.HasPrefix(path, "/docs/") {
 			filePath := strings.TrimPrefix(path, "/docs/")
 
-			// Пытаемся открыть файл из embedded FS
-			file, err := swaggerFS.Open("static/swagger/" + filePath)
+			// Открываем файл из embedded FS
+			f, err := swaggerFS.Open("static/swagger/" + filePath)
 			if err != nil {
 				http.NotFound(w, r)
 				return
 			}
-			defer file.Close()
+			defer f.Close()
+
+			// Пытаемся получить stat для заголовков (размер, время)
+			stat, err := f.Stat()
+			if err == nil {
+				w.Header().Set("Content-Length", string(stat.Size()))
+				// Если есть время модификации, ставим его для кэширования
+				if !stat.ModTime().IsZero() {
+					w.Header().Set("Last-Modified", stat.ModTime().UTC().Format(http.TimeFormat))
+				}
+			}
 
 			// Установка Content-Type
 			setContentType(w, filePath)
 
-			http.ServeContent(w, r, filePath, time.Now(), file)
+			_, err = io.Copy(w, f)
+			if err != nil {
+				log.Printf("Error copying %s to http.ServeMux: %v", path, err)
+				return
+			}
 			return
 		}
 
@@ -45,8 +59,9 @@ func SwaggerUIHandler(specURL string) http.Handler {
 	})
 }
 
-// setContentType устанавливает правильный MIME-type для файлов
 func setContentType(w http.ResponseWriter, path string) {
+	// Простая эвристика для Content-Type
+	// В продакшене лучше использовать пакет mime.TypeByExtension
 	switch {
 	case strings.HasSuffix(path, ".html"):
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -58,6 +73,8 @@ func setContentType(w http.ResponseWriter, path string) {
 		w.Header().Set("Content-Type", "image/png")
 	case strings.HasSuffix(path, ".svg"):
 		w.Header().Set("Content-Type", "image/svg+xml")
+	case strings.HasSuffix(path, ".json"):
+		w.Header().Set("Content-Type", "application/json")
 	default:
 		w.Header().Set("Content-Type", "application/octet-stream")
 	}
