@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -25,6 +26,7 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func init() {
+	fmt.Println("DEBUG: Running init()...")
 	nooa.RegisterModel[models.User]("User")
 	nooa.RegisterModel[models.CreateUserRequest]("CreateUserRequest")
 }
@@ -36,6 +38,8 @@ func main() {
 	nooa.NewRoute[models.CreateUserRequest, models.User]("POST", "/users", createUser).
 		Summary("Register new user").
 		Tags("Users").
+		RequestBodySchema("CreateUserRequest").
+		ResponseSchema(201, "User").
 		OnSuccess(201, "User created successfully").
 		OnClientErr(400, "Validation failed").
 		Register(mux).

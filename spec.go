@@ -22,20 +22,13 @@ type SpecTransformer func(spec map[string]any) map[string]any
 
 // buildBaseSpec собирает базовую структуру OpenAPI из зарегистрированных роутов и схем.
 func buildBaseSpec(info Info) map[string]any {
-	// 1. Получаем зарегистрированные схемы (от elval)
 	schemas := GetRegisteredSchemas()
 
-	// --- ОТЛАДКА: Проверяем содержимое схем ---
-	fmt.Printf("🔍 DEBUG: buildBaseSpec received %d schemas\n", len(schemas))
-	for k := range schemas {
-		fmt.Printf("   - Schema key: %s\n", k)
-	}
-
-	// Пробуем замаршалить схемы отдельно, чтобы увидеть их реальный вид
-	if debugJSON, err := json.MarshalIndent(schemas, "", "  "); err == nil {
-		fmt.Printf("📄 DEBUG: Schemas JSON content:\n%s\n", string(debugJSON))
-	} else {
-		fmt.Printf("❌ DEBUG: Failed to marshal schemas locally: %v\n", err)
+	fmt.Printf("🏗️ buildBaseSpec: Received %d schemas from getter\n", len(schemas))
+	if len(schemas) > 0 {
+		for k := range schemas {
+			fmt.Printf("   - Found schema: %s\n", k)
+		}
 	}
 
 	spec := map[string]any{
@@ -103,32 +96,45 @@ func buildBaseSpec(info Info) map[string]any {
 		if r.Method != "GET" && r.Method != "HEAD" && r.Method != "DELETE" {
 			content := map[string]any{}
 			for _, ct := range r.RequestContentType {
-				// Пытаемся найти схему по имени типа, если бы мы знали имя.
-				// Пока ставим заглушку, но в идеале здесь должна быть $ref.
-				// Так как мы используем RegisterModel, мы можем сослаться на схему, если знаем её имя.
-				// Но пока оставим object, так как маппинг Req -> Schema Name не автоматический без反射.
-				content[ct] = map[string]any{
-					"schema": map[string]any{
-						"type":        "object",
-						"description": "Request schema (see components/schemas)",
-					},
+				schemaObj := map[string]any{"type": "object", "description": "Request body"}
+
+				if r.RequestBodySchemaName != "" {
+					schemaObj = map[string]any{
+						"$ref": "#/components/schemas/" + r.RequestBodySchemaName,
+					}
 				}
+				content[ct] = map[string]any{"schema": schemaObj}
 			}
 			op["requestBody"] = map[string]any{"content": content}
 		}
 
 		// Responses
+		// spec.go (внутри buildBaseSpec, цикл по ответам)
+
 		resps := op["responses"].(map[string]any)
 		for _, resp := range r.Responses {
 			code := strconv.Itoa(resp.Status)
 			content := map[string]any{}
+
+			// Читаем из spec, а не из билдера (так как мы уже в buildBaseSpec)
+			schemaName, hasSchema := r.ResponseSchemaNames[resp.Status]
+
 			for _, ct := range resp.ContentTypes {
-				schema := map[string]any{"type": "object"}
-				if isBinaryContentType(ct) {
-					schema = map[string]any{"type": "string", "format": "binary"}
+				var schemaObj map[string]any
+
+				if hasSchema && schemaName != "" {
+					schemaObj = map[string]any{
+						"$ref": "#/components/schemas/" + schemaName,
+					}
+				} else {
+					schemaObj = map[string]any{"type": "object"}
+					if isBinaryContentType(ct) {
+						schemaObj = map[string]any{"type": "string", "format": "binary"}
+					}
 				}
-				content[ct] = map[string]any{"schema": schema}
+				content[ct] = map[string]any{"schema": schemaObj}
 			}
+
 			resps[code] = map[string]any{
 				"description": resp.Description,
 				"content":     content,
@@ -166,7 +172,6 @@ func GenerateSpecAtStartup(info Info, transformers ...SpecTransformer) ([]byte, 
 func SpecMiddleware(next http.Handler, info Info, transformers ...SpecTransformer) http.Handler {
 	// Проверка схем перед генерацией
 	schemas := GetRegisteredSchemas()
-	fmt.Printf("🚀 SpecMiddleware: Found %d registered schemas before generation.\n", len(schemas))
 	if len(schemas) == 0 {
 		fmt.Println("️  WARNING: No schemas found! Make sure RegisterModel[] is called in init().")
 	}
@@ -187,26 +192,6 @@ func SpecMiddleware(next http.Handler, info Info, transformers ...SpecTransforme
 		next.ServeHTTP(w, r)
 	})
 }
-
-// SpecMiddlewareWithPath аналогичен SpecMiddleware, но с кастомным путем.
-func SpecMiddlewareWithPath(next http.Handler, info Info, path string, transformers ...SpecTransformer) http.Handler {
-	specJSON, err := GenerateSpecAtStartup(info, transformers...)
-	if err != nil {
-		log.Printf("Error generating spec: %v", err)
-		specJSON = []byte(`{"openapi":"3.0.3","info":{"title":"Error","version":"0.0"},"paths":{}}`)
-	}
-
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == path {
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write(specJSON)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
-// === Helpers for Transformers ===
 
 // WithSecuritySchemes добавляет глобальные схемы безопасности.
 func WithSecuritySchemes(schemes map[string]any) SpecTransformer {

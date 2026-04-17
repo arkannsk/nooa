@@ -33,34 +33,38 @@ type SecurityRequirement struct {
 }
 
 type RouteSpec struct {
-	Method             string
-	Path               string
-	OperationID        string
-	Summary            string
-	Description        string
-	Tags               []string
-	Deprecated         bool
-	Security           []SecurityRequirement
-	RequestContentType []string
-	Responses          []ResponseSpec
-	Handler            http.HandlerFunc
-	Extensions         map[string]any
+	Method                string
+	Path                  string
+	OperationID           string
+	Summary               string
+	Description           string
+	Tags                  []string
+	Deprecated            bool
+	Security              []SecurityRequirement
+	RequestContentType    []string
+	Responses             []ResponseSpec
+	Handler               http.HandlerFunc
+	Extensions            map[string]any
+	RequestBodySchemaName string
+	ResponseSchemaNames   map[int]string // [Status Code] -> Schema Name
 }
 
 type RouteBuilder[Req, Res any] struct {
-	method             string
-	path               string
-	summary            string
-	description        string
-	operationID        string
-	tags               []string
-	security           []SecurityRequirement
-	requestContentType []string
-	deprecated         bool
-	handler            http.HandlerFunc
-	responses          []ResponseSpec
-	spec               *RouteSpec
-	extensions         map[string]any
+	method                string
+	path                  string
+	summary               string
+	description           string
+	operationID           string
+	tags                  []string
+	security              []SecurityRequirement
+	requestContentType    []string
+	deprecated            bool
+	handler               http.HandlerFunc
+	responses             []ResponseSpec
+	spec                  *RouteSpec
+	extensions            map[string]any
+	requestBodySchemaName string
+	responseSchemaNames   map[int]string
 }
 
 func NewRoute[Req, Res any](method, path string, handler http.HandlerFunc) *RouteBuilder[Req, Res] {
@@ -99,6 +103,7 @@ func defaultOperationID(method, path string) string {
 func (b *RouteBuilder[Req, Res]) syncSpec() {
 	if b.spec == nil {
 		b.spec = &RouteSpec{}
+		b.spec.ResponseSchemaNames = make(map[int]string)
 	}
 	b.spec.Method = b.method
 	b.spec.Path = b.path
@@ -112,6 +117,7 @@ func (b *RouteBuilder[Req, Res]) syncSpec() {
 	b.spec.RequestContentType = append([]string(nil), b.requestContentType...)
 	b.spec.Responses = append([]ResponseSpec(nil), b.responses...)
 	b.spec.Handler = b.handler
+	b.spec.RequestBodySchemaName = b.requestBodySchemaName
 
 	// Копирование расширений (исправлено)
 	if len(b.extensions) > 0 {
@@ -120,6 +126,13 @@ func (b *RouteBuilder[Req, Res]) syncSpec() {
 		}
 		for k, v := range b.extensions {
 			b.spec.Extensions[k] = v
+		}
+	}
+
+	if b.responseSchemaNames != nil {
+		b.spec.ResponseSchemaNames = make(map[int]string)
+		for k, v := range b.responseSchemaNames {
+			b.spec.ResponseSchemaNames[k] = v
 		}
 	}
 }
@@ -171,6 +184,21 @@ func (b *RouteBuilder[Req, Res]) Extension(key string, value any) *RouteBuilder[
 	}
 	b.extensions[key] = value
 	// Обновляем spec, чтобы изменения были видны сразу при вызове Spec()
+	b.syncSpec()
+	return b
+}
+
+func (b *RouteBuilder[Req, Res]) RequestBodySchema(name string) *RouteBuilder[Req, Res] {
+	b.requestBodySchemaName = name
+	b.syncSpec()
+	return b
+}
+
+func (b *RouteBuilder[Req, Res]) ResponseSchema(status int, schemaName string) *RouteBuilder[Req, Res] {
+	if b.responseSchemaNames == nil {
+		b.responseSchemaNames = make(map[int]string)
+	}
+	b.responseSchemaNames[status] = schemaName
 	b.syncSpec()
 	return b
 }
