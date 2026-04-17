@@ -8,7 +8,7 @@ package models
 // @oa:description "Complete user profile information"
 type User struct {
 	// @evl:validate required
-	// @evl:validate uuid
+	// @evl:validate pattern:uuid
 	// @oa:description "Unique identifier for the user"
 	// @oa:example "550e8400-e29b-41d4-a716-446655440000"
 	ID string `json:"id"`
@@ -43,15 +43,20 @@ type User struct {
 type CreateUserRequest struct {
 	// @evl:validate required
 	// @evl:validate min:3
+	// @oa:example "Mike Ivanov"
+	// @oa:default "Mike Ivanov"
 	Name string `json:"name"`
 
 	// @evl:validate required
 	// @evl:validate pattern:email
+	// @oa:example "m.ivanov@example.com"
+	// @oa:default "m.ivanov@example.com"
 	Email string `json:"email"`
 
 	// @evl:validate optional
+	// @oa:example 25
 	Age *int `json:"age,omitempty"`
 
-	// По умолчанию 'user'
+	// @oa:example "user"
 	Role string `json:"role"`
 }

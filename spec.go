@@ -24,13 +24,6 @@ type SpecTransformer func(spec map[string]any) map[string]any
 func buildBaseSpec(info Info) map[string]any {
 	schemas := GetRegisteredSchemas()
 
-	fmt.Printf("🏗️ buildBaseSpec: Received %d schemas from getter\n", len(schemas))
-	if len(schemas) > 0 {
-		for k := range schemas {
-			fmt.Printf("   - Found schema: %s\n", k)
-		}
-	}
-
 	spec := map[string]any{
 		"openapi": "3.0.3",
 		"info":    info,

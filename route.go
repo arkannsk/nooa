@@ -258,6 +258,7 @@ func (b *RouteBuilder[Req, Res]) Register(mux *http.ServeMux) *RouteBuilder[Req,
 		panic("nooa: path cannot be empty")
 	}
 	mux.HandleFunc(b.method+" "+b.path, b.handler)
+	b.registerGlobal()
 	return b
 }
 
@@ -280,7 +281,7 @@ func (b *RouteBuilder[Req, Res]) Spec() RouteSpec {
 	return spec
 }
 
-func (b *RouteBuilder[Req, Res]) RegisterGlobal() *RouteBuilder[Req, Res] {
+func (b *RouteBuilder[Req, Res]) registerGlobal() *RouteBuilder[Req, Res] {
 	addToRegistryInternal(b.Spec())
 	return b
 }

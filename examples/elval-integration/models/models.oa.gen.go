@@ -21,6 +21,8 @@ func (v *User) OaSchema() *oa.Schema {
 		prop.Type = "string"
 
 		schema.Required = append(schema.Required, "id")
+		prop.Pattern = `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`
+		prop.Format = "uuid"
 
 		prop.Description = "Unique identifier for the user"
 		prop.Example = "550e8400-e29b-41d4-a716-446655440000"
@@ -102,6 +104,8 @@ func (v *CreateUserRequest) OaSchema() *oa.Schema {
 		schema.Required = append(schema.Required, "name")
 		prop.MinLength = oa.Ptr[int64](3)
 
+		prop.Example = "Mike Ivanov"
+
 		schema.Properties["name"] = prop
 	}
 	// Поле Email
@@ -113,6 +117,8 @@ func (v *CreateUserRequest) OaSchema() *oa.Schema {
 		schema.Required = append(schema.Required, "email")
 		prop.Pattern = `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
 
+		prop.Example = "m.ivanov@example.com"
+
 		schema.Properties["email"] = prop
 	}
 	// Поле Age
@@ -121,6 +127,8 @@ func (v *CreateUserRequest) OaSchema() *oa.Schema {
 
 		prop.Type = "integer"
 
+		prop.Example = 25
+
 		schema.Properties["age"] = prop
 	}
 	// Поле Role
@@ -128,6 +136,8 @@ func (v *CreateUserRequest) OaSchema() *oa.Schema {
 		prop := oa.Schema{}
 
 		prop.Type = "string"
+
+		prop.Example = "user"
 
 		schema.Properties["role"] = prop
 	}

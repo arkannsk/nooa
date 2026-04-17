@@ -12,6 +12,7 @@ var (
 	User_IDValidator = func() *validator.FieldValidator[string] {
 		v := validator.New[string]("ID")
 		v.AddRule(validator.Required[string]())
+		v.AddRule(validator.UUID())
 		return v
 	}()
 

@@ -42,15 +42,9 @@ func main() {
 		ResponseSchema(201, "User").
 		OnSuccess(201, "User created successfully").
 		OnClientErr(400, "Validation failed").
-		Register(mux).
-		RegisterGlobal()
+		Register(mux)
 
-	// 2. Создаем цепочку обработчиков
-
-	// Сначала хендлер для Swagger UI (на пути /docs/...)
 	swaggerHandler := nooa.SwaggerUIHandler("/openapi.json")
-
-	// Затем хендлер для спецификации и основных роутов
 	apiHandler := nooa.SpecMiddleware(
 		mux,
 		nooa.Info{
