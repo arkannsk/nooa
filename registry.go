@@ -10,9 +10,10 @@ var (
 	registerHooks []RegisterHook
 )
 
+// RegisterHook — функция-хук для модификации роута перед добавлением в глобальный реестр.
 type RegisterHook func(spec RouteSpec) RouteSpec
 
-// AddRegisterHook регистрирует функцию-хук для модификации роута перед добавлением.
+// AddRegisterHook регистрирует функцию-хук.
 func AddRegisterHook(hook RegisterHook) {
 	registerHooks = append(registerHooks, hook)
 }
@@ -22,7 +23,7 @@ func ClearHooks() {
 	registerHooks = nil
 }
 
-// addToRegistryInternal применяет хуки и добавляет роут в реестр.
+// addToRegistryInternal применяет хуки и добавляет роут в глобальный реестр.
 func addToRegistryInternal(spec RouteSpec) {
 	for _, hook := range registerHooks {
 		spec = hook(spec)
@@ -30,7 +31,7 @@ func addToRegistryInternal(spec RouteSpec) {
 	routeRegistry = append(routeRegistry, spec)
 }
 
-// RegisteredRoutes возвращает копию всех зарегистрированных маршрутов.
+// RegisteredRoutes возвращает копию всех зарегистрированных маршрутов из глобального реестра.
 func RegisteredRoutes() []RouteSpec {
 	registryMu.RLock()
 	defer registryMu.RUnlock()
@@ -39,7 +40,7 @@ func RegisteredRoutes() []RouteSpec {
 	return result
 }
 
-// ClearRegistry очищает реестр (используется в тестах).
+// ClearRegistry очищает глобальный реестр (используется в тестах).
 func ClearRegistry() {
 	registryMu.Lock()
 	defer registryMu.Unlock()

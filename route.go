@@ -351,3 +351,28 @@ func getSchemaName[T any]() string {
 	pkgName := path.Base(pkgPath)
 	return pkgName + "." + typeName
 }
+
+func (b *RouteBuilder[Req, Res]) RegisterSpec(spec *Spec) *RouteBuilder[Req, Res] {
+	if spec != nil {
+		// Регистрируем модели в спецификации
+		reqName := getSchemaName[Req]()
+		resName := getSchemaName[Res]()
+
+		// Важно: регистрируем модели в Spec, а не глобально
+		spec.RegisterModel(reqName, new(Req))
+		spec.RegisterModel(resName, new(Res))
+
+		// Добавляем роут в Spec
+		spec.AddRoute(b.Spec())
+	}
+	return b
+}
+
+// RegisterSpecAndMux привязывает к Spec И регистрирует хендлер в mux.
+func (b *RouteBuilder[Req, Res]) RegisterSpecAndMux(mux *http.ServeMux, spec *Spec) *RouteBuilder[Req, Res] {
+	b.Register(mux)
+	if spec != nil {
+		b.RegisterSpec(spec)
+	}
+	return b
+}

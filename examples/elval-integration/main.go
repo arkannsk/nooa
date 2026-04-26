@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"strings"
 
 	"github.com/arkannsk/nooa"
 	"github.com/arkannsk/nooa/examples/elval-integration/models"
@@ -27,38 +26,25 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 func main() {
 	mux := http.NewServeMux()
 
+	spec := nooa.NewSpec(nooa.Info{
+		Title:       "ElVal Integration Demo",
+		Description: "Interactive docs with embedded Swagger UI.",
+		Version:     "1.0.0",
+	})
+
 	nooa.NewRoute[models.CreateUserRequest, models.User]("POST", "/users", createUser).
 		Summary("Register new user").
 		Tags("Users").
 		OnSuccess(200, "User created").
 		OnSuccess(201, "User created successfully").
 		OnClientErr(400, "Validation failed").
-		Register(mux)
+		RegisterSpecAndMux(mux, spec)
 
-	swaggerHandler := nooa.SwaggerUIHandler("/openapi.json")
-	apiHandler := nooa.SpecMiddleware(
-		mux,
-		nooa.Info{
-			Title:       "Elval Integration Demo",
-			Version:     "1.0.0",
-			Description: "Interactive docs with embedded Swagger UI.",
-		},
-	)
-
-	// Объединяем всё в один главный хендлер
-	finalHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Если путь начинается с /docs, отдаем Swagger UI
-		if r.URL.Path == "/docs" || strings.HasPrefix(r.URL.Path, "/docs/") {
-			swaggerHandler.ServeHTTP(w, r)
-			return
-		}
-		// Иначе передаем в API хендлер (который отдаст openapi.json или проксирует в mux)
-		apiHandler.ServeHTTP(w, r)
-	})
+	nooa.RegisterVersionedAPI("", spec, mux)
 
 	log.Println("Server starting on http://localhost:8080")
-	log.Println("Swagger UI: http://localhost:8080/docs")
+	log.Println("Swagger UI: http://localhost:8080/docs/")
 	log.Println("Raw JSON:   http://localhost:8080/openapi.json")
 
-	log.Fatal(http.ListenAndServe(":8080", finalHandler))
+	log.Fatal(http.ListenAndServe(":8080", mux))
 }
