@@ -20,8 +20,7 @@ func main() {
 		OnClientErr(400, "Invalid request body", nooa.CTJSON, nooa.CTProblemJSON).
 		OnClientErr(409, "Email already exists").
 		OnServerErr(500, "Internal server error").
-		Register(mux).
-		RegisterGlobal()
+		Register(mux)
 
 	nooa.NewRoute[struct{}, models.User]("GET", "/users/{id}", handlers.GetUser).
 		Summary("Get user by ID").
@@ -30,8 +29,7 @@ func main() {
 		OnSuccess(200, "User found").
 		OnClientErr(404, "User not found").
 		OnServerErr(500, "Internal server error").
-		Register(mux).
-		RegisterGlobal()
+		Register(mux)
 
 	nooa.NewRoute[struct{}, []byte]("GET", "/users/export", handlers.ExportUsers).
 		Summary("Export users as CSV").
@@ -41,8 +39,7 @@ func main() {
 		OnSuccess(200, "CSV file", nooa.CTCSV).
 		OnServerErr(500, "Export failed").
 		Deprecated().
-		Register(mux).
-		RegisterGlobal()
+		Register(mux)
 
 	// Middleware для отдачи OpenAPI spec
 	handler := nooa.SpecMiddleware(mux, nooa.Info{

@@ -4,17 +4,16 @@
 package models
 
 import (
-	"github.com/arkannsk/elval/pkg/oa"
+	oa "github.com/arkannsk/elval/pkg/oa"
 )
 
-// OaSchema возвращает OpenAPI схему для структуры User
 func (v *User) OaSchema() *oa.Schema {
 	schema := &oa.Schema{
 		Type:       "object",
 		Properties: make(map[string]oa.Schema, 5),
 		Required:   make([]string, 0, 5),
+		Ref:        v.GlobalRef(),
 	}
-	// Поле ID
 	{
 		prop := oa.Schema{}
 
@@ -29,7 +28,6 @@ func (v *User) OaSchema() *oa.Schema {
 
 		schema.Properties["id"] = prop
 	}
-	// Поле Name
 	{
 		prop := oa.Schema{}
 
@@ -39,13 +37,12 @@ func (v *User) OaSchema() *oa.Schema {
 		prop.MinLength = oa.Ptr[int64](3)
 		prop.MaxLength = oa.Ptr[int64](50)
 
-		prop.Title = "Full Name"
 		prop.Description = "The user's full name"
+		prop.Title = "Full Name"
 		prop.Example = "John Doe"
 
 		schema.Properties["name"] = prop
 	}
-	// Поле Email
 	{
 		prop := oa.Schema{}
 
@@ -59,11 +56,8 @@ func (v *User) OaSchema() *oa.Schema {
 
 		schema.Properties["email"] = prop
 	}
-	// Поле Age
 	{
 		prop := oa.Schema{}
-
-		prop.Type = "integer"
 
 		prop.Minimum = oa.Ptr[float64](18)
 		prop.Maximum = oa.Ptr[float64](120)
@@ -72,7 +66,6 @@ func (v *User) OaSchema() *oa.Schema {
 
 		schema.Properties["age"] = prop
 	}
-	// Поле Role
 	{
 		prop := oa.Schema{}
 
@@ -85,17 +78,21 @@ func (v *User) OaSchema() *oa.Schema {
 
 		schema.Properties["role"] = prop
 	}
+
 	return schema
 }
 
-// OaSchema возвращает OpenAPI схему для структуры CreateUserRequest
+func (v *User) GlobalRef() string {
+	return "github.com/arkannsk/nooa/examples/elval-integration/models.User"
+}
+
 func (v *CreateUserRequest) OaSchema() *oa.Schema {
 	schema := &oa.Schema{
 		Type:       "object",
 		Properties: make(map[string]oa.Schema, 4),
 		Required:   make([]string, 0, 4),
+		Ref:        v.GlobalRef(),
 	}
-	// Поле Name
 	{
 		prop := oa.Schema{}
 
@@ -108,7 +105,6 @@ func (v *CreateUserRequest) OaSchema() *oa.Schema {
 
 		schema.Properties["name"] = prop
 	}
-	// Поле Email
 	{
 		prop := oa.Schema{}
 
@@ -121,17 +117,13 @@ func (v *CreateUserRequest) OaSchema() *oa.Schema {
 
 		schema.Properties["email"] = prop
 	}
-	// Поле Age
 	{
 		prop := oa.Schema{}
 
-		prop.Type = "integer"
-
-		prop.Example = 25
+		prop.Example = "25"
 
 		schema.Properties["age"] = prop
 	}
-	// Поле Role
 	{
 		prop := oa.Schema{}
 
@@ -141,5 +133,10 @@ func (v *CreateUserRequest) OaSchema() *oa.Schema {
 
 		schema.Properties["role"] = prop
 	}
+
 	return schema
+}
+
+func (v *CreateUserRequest) GlobalRef() string {
+	return "github.com/arkannsk/nooa/examples/elval-integration/models.CreateUserRequest"
 }

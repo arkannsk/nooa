@@ -75,6 +75,8 @@ func NewRoute[Req, Res any](method, path string, handler http.HandlerFunc) *Rout
 		operationID:        defaultOperationID(method, path),
 		requestContentType: []string{CTJSON},
 	}
+	RegisterModel[Req]("Request")
+	RegisterModel[Res]("Response")
 	b.syncSpec()
 	return b
 }

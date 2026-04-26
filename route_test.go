@@ -70,13 +70,11 @@ func TestRegisterAndGlobalRegistry(t *testing.T) {
 	// Вариант 1: Цепочка (теперь работает!)
 	NewRoute[Req, Res]("POST", "/b", handlerOK).
 		Summary("B").
-		Register(mux).
-		RegisterGlobal()
+		Register(mux)
 
 	// Вариант 2: Раздельные вызовы (тоже работает)
 	NewRoute[Req, Res]("GET", "/a", handlerOK).
 		Summary("A").
-		RegisterGlobal().
 		Register(mux)
 
 	routes := RegisteredRoutes()

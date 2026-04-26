@@ -5,7 +5,8 @@ package models
 
 import (
 	"context"
-	"github.com/arkannsk/elval/pkg/validator"
+	errs "github.com/arkannsk/elval/pkg/errs"
+	validator "github.com/arkannsk/elval/pkg/validator"
 )
 
 var (
@@ -49,43 +50,6 @@ var (
 	}()
 )
 
-func (v *User) Decorate(ctx context.Context) error {
-
-	return nil
-}
-
-func (v *User) Validate() error {
-
-	if err := User_IDValidator.Validate(v.ID); err != nil {
-		return err
-	}
-
-	if err := User_NameValidator.Validate(v.Name); err != nil {
-		return err
-	}
-
-	if err := User_EmailValidator.Validate(v.Email); err != nil {
-		return err
-	}
-
-	// Указатель Age
-	if v.Age != nil {
-		val := *v.Age
-		if err := User_AgeValidator.Validate(val); err != nil {
-			return &validator.ValidationError{
-				Field:   "Age",
-				Rule:    "nested",
-				Message: "поле Age: " + err.Error(),
-			}
-		}
-	}
-
-	if err := User_RoleValidator.Validate(v.Role); err != nil {
-		return err
-	}
-	return nil
-}
-
 var (
 	CreateUserRequest_NameValidator = func() *validator.FieldValidator[string] {
 		v := validator.New[string]("Name")
@@ -108,33 +72,35 @@ var (
 		v.AddRule(validator.SkipIfZero(original.Validate))
 		return v
 	}()
-
-	CreateUserRequest_RoleValidator = func() *validator.FieldValidator[string] {
-		v := validator.New[string]("Role")
-		return v
-	}()
 )
+
+func (v *User) Decorate(ctx context.Context) error {
+
+	return nil
+}
 
 func (v *CreateUserRequest) Decorate(ctx context.Context) error {
 
 	return nil
 }
 
-func (v *CreateUserRequest) Validate() error {
-
-	if err := CreateUserRequest_NameValidator.Validate(v.Name); err != nil {
+func (v *User) Validate() error {
+	var err *errs.ValidationError
+	if err = User_IDValidator.Validate(v.ID); err != nil {
 		return err
 	}
-
-	if err := CreateUserRequest_EmailValidator.Validate(v.Email); err != nil {
+	if err = User_NameValidator.Validate(v.Name); err != nil {
+		return err
+	}
+	if err = User_EmailValidator.Validate(v.Email); err != nil {
 		return err
 	}
 
 	// Указатель Age
 	if v.Age != nil {
 		val := *v.Age
-		if err := CreateUserRequest_AgeValidator.Validate(val); err != nil {
-			return &validator.ValidationError{
+		if err := User_AgeValidator.Validate(val); err != nil {
+			return &errs.ValidationError{
 				Field:   "Age",
 				Rule:    "nested",
 				Message: "поле Age: " + err.Error(),
@@ -142,8 +108,32 @@ func (v *CreateUserRequest) Validate() error {
 		}
 	}
 
-	if err := CreateUserRequest_RoleValidator.Validate(v.Role); err != nil {
+	if err = User_RoleValidator.Validate(v.Role); err != nil {
 		return err
 	}
+	return nil
+}
+
+func (v *CreateUserRequest) Validate() error {
+	var err *errs.ValidationError
+	if err = CreateUserRequest_NameValidator.Validate(v.Name); err != nil {
+		return err
+	}
+	if err = CreateUserRequest_EmailValidator.Validate(v.Email); err != nil {
+		return err
+	}
+
+	// Указатель Age
+	if v.Age != nil {
+		val := *v.Age
+		if err := CreateUserRequest_AgeValidator.Validate(val); err != nil {
+			return &errs.ValidationError{
+				Field:   "Age",
+				Rule:    "nested",
+				Message: "поле Age: " + err.Error(),
+			}
+		}
+	}
+
 	return nil
 }

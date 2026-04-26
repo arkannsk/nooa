@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -37,7 +38,7 @@ func SwaggerUIHandler(specURL string) http.Handler {
 			// Пытаемся получить stat для заголовков (размер, время)
 			stat, err := f.Stat()
 			if err == nil {
-				w.Header().Set("Content-Length", string(stat.Size()))
+				w.Header().Set("Content-Length", strconv.FormatInt(stat.Size(), 10))
 				// Если есть время модификации, ставим его для кэширования
 				if !stat.ModTime().IsZero() {
 					w.Header().Set("Last-Modified", stat.ModTime().UTC().Format(http.TimeFormat))
