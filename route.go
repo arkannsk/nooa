@@ -153,39 +153,42 @@ func (b *RouteBuilder[Req, Res]) syncSpec() {
 	}
 }
 
-// Вспомогательное поле для накопления расширений до syncSpec
-var extensionsTemp map[string]any
-
 func (b *RouteBuilder[Req, Res]) Summary(s string) *RouteBuilder[Req, Res] {
 	b.summary = s
 	b.syncSpec()
 	return b
 }
+
 func (b *RouteBuilder[Req, Res]) Description(s string) *RouteBuilder[Req, Res] {
 	b.description = s
 	b.syncSpec()
 	return b
 }
+
 func (b *RouteBuilder[Req, Res]) Tags(tags ...string) *RouteBuilder[Req, Res] {
 	b.tags = append(b.tags, tags...)
 	b.syncSpec()
 	return b
 }
+
 func (b *RouteBuilder[Req, Res]) OperationID(id string) *RouteBuilder[Req, Res] {
 	b.operationID = id
 	b.syncSpec()
 	return b
 }
+
 func (b *RouteBuilder[Req, Res]) Deprecated() *RouteBuilder[Req, Res] {
 	b.deprecated = true
 	b.syncSpec()
 	return b
 }
+
 func (b *RouteBuilder[Req, Res]) Secure(scheme string, scopes ...string) *RouteBuilder[Req, Res] {
 	b.security = append(b.security, SecurityRequirement{Scheme: scheme, Scopes: scopes})
 	b.syncSpec()
 	return b
 }
+
 func (b *RouteBuilder[Req, Res]) RequestContentType(cts ...string) *RouteBuilder[Req, Res] {
 	if len(cts) > 0 {
 		b.requestContentType = cts
@@ -235,6 +238,16 @@ func (b *RouteBuilder[Req, Res]) Prefix(prefix string) *RouteBuilder[Req, Res] {
 
 func (b *RouteBuilder[Req, Res]) OnSuccess(status int, desc string, ct ...string) *RouteBuilder[Req, Res] {
 	b.addResponse(status, desc, ct, false)
+
+	if b.responseSchemaNames == nil {
+		b.responseSchemaNames = make(map[int]string)
+	}
+
+	if _, exists := b.responseSchemaNames[status]; !exists {
+		b.responseSchemaNames[status] = getSchemaName[Res]()
+	}
+
+	b.syncSpec()
 	return b
 }
 
@@ -243,6 +256,7 @@ func (b *RouteBuilder[Req, Res]) OnClientErr(status int, desc string, ct ...stri
 		ct = []string{CTProblemJSON}
 	}
 	b.addResponse(status, desc, ct, true)
+	b.syncSpec()
 	return b
 }
 
@@ -251,6 +265,7 @@ func (b *RouteBuilder[Req, Res]) OnServerErr(status int, desc string, ct ...stri
 		ct = []string{CTProblemJSON}
 	}
 	b.addResponse(status, desc, ct, true)
+	b.syncSpec()
 	return b
 }
 
@@ -267,8 +282,8 @@ func (b *RouteBuilder[Req, Res]) addResponse(status int, desc string, ct []strin
 	b.responses = append(b.responses, ResponseSpec{
 		Status: status, Description: desc, ContentTypes: ct, IsError: isError,
 	})
-	b.syncSpec()
 }
+
 func (b *RouteBuilder[Req, Res]) Register(mux *http.ServeMux) *RouteBuilder[Req, Res] {
 	if b.handler == nil {
 		panic("nooa: handler cannot be nil")

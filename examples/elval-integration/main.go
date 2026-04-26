@@ -30,6 +30,7 @@ func main() {
 	nooa.NewRoute[models.CreateUserRequest, models.User]("POST", "/users", createUser).
 		Summary("Register new user").
 		Tags("Users").
+		OnSuccess(200, "User created").
 		OnSuccess(201, "User created successfully").
 		OnClientErr(400, "Validation failed").
 		Register(mux)
