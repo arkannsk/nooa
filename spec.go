@@ -20,7 +20,6 @@ type Info struct {
 // SpecTransformer — функция для модификации спецификации перед отдачей.
 type SpecTransformer func(spec map[string]any) map[string]any
 
-// buildBaseSpec собирает базовую структуру OpenAPI из зарегистрированных роутов и схем.
 func buildBaseSpec(info Info) map[string]any {
 	schemas := GetRegisteredSchemas()
 
@@ -30,14 +29,13 @@ func buildBaseSpec(info Info) map[string]any {
 		"servers": []map[string]string{{"url": "/", "description": "Current server"}},
 		"paths":   map[string]any{},
 		"components": map[string]any{
-			"schemas": schemas, // Вставляем схемы сюда
+			"schemas": schemas,
 		},
 	}
 
 	paths := spec["paths"].(map[string]any)
 	pathParamRegex := regexp.MustCompile(`\{([^}]+)\}`)
 
-	// 2. Собираем пути из RegisteredRoutes()
 	for _, r := range RegisteredRoutes() {
 		pathItem, ok := paths[r.Path].(map[string]any)
 		if !ok {
@@ -85,40 +83,38 @@ func buildBaseSpec(info Info) map[string]any {
 			op["parameters"] = params
 		}
 
-		// Request Body (если не GET/HEAD/DELETE)
+		// Request Body
 		if r.Method != "GET" && r.Method != "HEAD" && r.Method != "DELETE" {
 			content := map[string]any{}
 			for _, ct := range r.RequestContentType {
 				schemaObj := map[string]any{"type": "object", "description": "Request body"}
-
 				if r.RequestBodySchemaName != "" {
-					schemaObj = map[string]any{
-						"$ref": "#/components/schemas/" + r.RequestBodySchemaName,
-					}
+					schemaObj = map[string]any{"$ref": "#/components/schemas/" + r.RequestBodySchemaName}
 				}
 				content[ct] = map[string]any{"schema": schemaObj}
 			}
-			op["requestBody"] = map[string]any{"content": content}
+			if len(content) > 0 {
+				op["requestBody"] = map[string]any{"content": content}
+			}
 		}
 
 		// Responses
-		// spec.go (внутри buildBaseSpec, цикл по ответам)
-
 		resps := op["responses"].(map[string]any)
 		for _, resp := range r.Responses {
 			code := strconv.Itoa(resp.Status)
-			content := map[string]any{}
-
-			// Читаем из spec, а не из билдера (так как мы уже в buildBaseSpec)
 			schemaName, hasSchema := r.ResponseSchemaNames[resp.Status]
 
+			if resp.Status == 204 || resp.Status == 205 {
+				resps[code] = map[string]any{"description": resp.Description}
+				continue
+			}
+
+			content := map[string]any{}
 			for _, ct := range resp.ContentTypes {
 				var schemaObj map[string]any
 
 				if hasSchema && schemaName != "" {
-					schemaObj = map[string]any{
-						"$ref": "#/components/schemas/" + schemaName,
-					}
+					schemaObj = map[string]any{"$ref": "#/components/schemas/" + schemaName}
 				} else {
 					schemaObj = map[string]any{"type": "object"}
 					if isBinaryContentType(ct) {
@@ -128,9 +124,14 @@ func buildBaseSpec(info Info) map[string]any {
 				content[ct] = map[string]any{"schema": schemaObj}
 			}
 
-			resps[code] = map[string]any{
-				"description": resp.Description,
-				"content":     content,
+			// Если контента нет, не добавляем пустой блок
+			if len(content) > 0 {
+				resps[code] = map[string]any{
+					"description": resp.Description,
+					"content":     content,
+				}
+			} else {
+				resps[code] = map[string]any{"description": resp.Description}
 			}
 		}
 

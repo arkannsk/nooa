@@ -2,70 +2,93 @@ package nooa
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"reflect"
-)
+	"strings"
 
-// modelSchemas хранит схемы.
-var modelSchemas = make(map[string]any)
+	"github.com/arkannsk/elval/pkg/oa"
+)
 
 // RegisterModel регистрирует модель, используя рефлексию для поиска метода OaSchema.
 // Это позволяет работать со структурами, у которых метод возвращает конкретный тип (*oa.Schema),
 // а не интерфейс any.
-func RegisterModel[T any](name string) {
-	var zero T
-	val := reflect.ValueOf(&zero)
+// modelSchemas хранит схемы напрямую в типизированном виде
+var modelSchemas = make(map[string]*oa.Schema)
 
-	// 1. Поиск метода
-	method := val.MethodByName("OaSchema")
+// RegisterModel регистрирует модель, вызывая её метод OaSchema().
+// Работает напрямую с *oa.Schema. Если по какой-то причине возвращается не *oa.Schema,
+// используется фоллбэк через json.Unmarshal (как вы просили).
+func RegisterModel(name string, instance any) {
+	// Корректно извлекаем тип для fallback-имени
+	t := reflect.TypeOf(instance)
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+
+	// Подготовка для вызова OaSchema()
+	val := reflect.ValueOf(instance)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+
+	var method reflect.Value
+	if m := val.MethodByName("OaSchema"); m.IsValid() {
+		method = m
+	} else if val.CanAddr() {
+		if m := val.Addr().MethodByName("OaSchema"); m.IsValid() {
+			method = m
+		}
+	} else {
+		ptr := reflect.New(val.Type())
+		ptr.Elem().Set(val)
+		if m := ptr.MethodByName("OaSchema"); m.IsValid() {
+			method = m
+		}
+	}
+
 	if !method.IsValid() {
-		log.Printf("❌ FAIL: Method OaSchema not found on %T", zero)
+		log.Printf("⚠️ OaSchema not found on %T", instance)
 		return
 	}
 
-	// 2. Вызов метода
 	results := method.Call(nil)
-	if len(results) == 0 {
-		log.Printf("❌ FAIL: OaSchema returned no values")
+	if len(results) == 0 || results[0].IsNil() {
+		log.Printf("❌ OaSchema returned nil for %T", instance)
 		return
 	}
 
-	schemaObj := results[0].Interface()
-	if schemaObj == nil {
-		log.Printf(" FAIL: OaSchema returned nil")
-		return
+	// Извлекаем *oa.Schema (прямой путь или fallback)
+	var schema *oa.Schema
+	if s, ok := results[0].Interface().(*oa.Schema); ok {
+		schema = s
+	} else {
+		// Fallback через JSON
+		data, _ := json.Marshal(results[0].Interface())
+		schema = &oa.Schema{}
+		json.Unmarshal(data, schema)
+		log.Printf("OaSchema fallback used for %T", instance)
 	}
 
-	// 3. Маршалинг
-	data, err := json.Marshal(schemaObj)
-	if err != nil {
-		log.Printf("❌ FAIL: Marshal error: %v", err)
-		// Попробуем вывести тип ошибки подробнее
-		fmt.Printf("   Schema object content: %+v\n", schemaObj)
-		return
+	//  Проверка на коллизию ключей
+	if _, exists := modelSchemas[name]; exists {
+		fullRef := t.PkgPath() + "." + t.Name()
+		name = sanitizeGlobalRefForOpenAPI(fullRef)
+		log.Printf("Collision resolved: %s → %s", name, name)
 	}
 
-	// 4. Размаршалинг в map
-	var schemaMap map[string]any
-	if err := json.Unmarshal(data, &schemaMap); err != nil {
-		log.Printf("❌ FAIL: Unmarshal error: %v", err)
-		return
-	}
-
-	if len(schemaMap) == 0 {
-		return
-	}
-
-	// 5. Сохранение в глобальную мапу
-	modelSchemas[name] = schemaMap
+	// 5. Очищаем $ref перед сохранением в компоненты
+	schema.Ref = ""
+	modelSchemas[name] = schema
 }
 
-func GetRegisteredSchemas() map[string]any {
-	result := make(map[string]any, len(modelSchemas))
-	for k, v := range modelSchemas {
-		result[k] = v
-	}
+// GetRegisteredSchemas возвращает все зарегистрированные схемы
+func GetRegisteredSchemas() map[string]*oa.Schema {
+	return modelSchemas
+}
 
-	return result
+func sanitizeGlobalRefForOpenAPI(ref string) string {
+	// Заменяем слеши на точки, убираем ведущие точки/пустоты
+	s := strings.ReplaceAll(ref, "/", ".")
+	s = strings.TrimLeft(s, ".")
+	return s
 }

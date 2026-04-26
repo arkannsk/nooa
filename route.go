@@ -2,10 +2,10 @@ package nooa
 
 import (
 	"net/http"
+	"path"
+	"reflect"
 	"strings"
 )
-
-// ... (константы CTJSON и т.д. остаются без изменений) ...
 
 const (
 	CTJSON        = "application/json"
@@ -75,8 +75,22 @@ func NewRoute[Req, Res any](method, path string, handler http.HandlerFunc) *Rout
 		operationID:        defaultOperationID(method, path),
 		requestContentType: []string{CTJSON},
 	}
-	RegisterModel[Req]("Request")
-	RegisterModel[Res]("Response")
+	reqSchemaName := getSchemaName[Req]()
+	resSchemaName := getSchemaName[Res]()
+
+	RegisterModel(reqSchemaName, new(Req))
+	RegisterModel(resSchemaName, new(Res))
+
+	if method != "GET" && method != "HEAD" && method != "DELETE" {
+		b.RequestBodySchema(reqSchemaName)
+	}
+	// Автоматически привязываем основной ответ к 200/201
+	if b.responseSchemaNames == nil {
+		b.responseSchemaNames = make(map[int]string)
+	}
+	b.responseSchemaNames[200] = resSchemaName
+	b.responseSchemaNames[201] = resSchemaName
+
 	b.syncSpec()
 	return b
 }
@@ -223,6 +237,7 @@ func (b *RouteBuilder[Req, Res]) OnSuccess(status int, desc string, ct ...string
 	b.addResponse(status, desc, ct, false)
 	return b
 }
+
 func (b *RouteBuilder[Req, Res]) OnClientErr(status int, desc string, ct ...string) *RouteBuilder[Req, Res] {
 	if len(ct) == 0 {
 		ct = []string{CTProblemJSON}
@@ -230,6 +245,7 @@ func (b *RouteBuilder[Req, Res]) OnClientErr(status int, desc string, ct ...stri
 	b.addResponse(status, desc, ct, true)
 	return b
 }
+
 func (b *RouteBuilder[Req, Res]) OnServerErr(status int, desc string, ct ...string) *RouteBuilder[Req, Res] {
 	if len(ct) == 0 {
 		ct = []string{CTProblemJSON}
@@ -237,6 +253,7 @@ func (b *RouteBuilder[Req, Res]) OnServerErr(status int, desc string, ct ...stri
 	b.addResponse(status, desc, ct, true)
 	return b
 }
+
 func (b *RouteBuilder[Req, Res]) OnNoContent(status int, desc string) *RouteBuilder[Req, Res] {
 	b.responses = append(b.responses, ResponseSpec{Status: status, Description: desc, IsError: false})
 	b.syncSpec()
@@ -286,4 +303,36 @@ func (b *RouteBuilder[Req, Res]) Spec() RouteSpec {
 func (b *RouteBuilder[Req, Res]) registerGlobal() *RouteBuilder[Req, Res] {
 	addToRegistryInternal(b.Spec())
 	return b
+}
+
+func WithResponse[Req, Res, T any](b *RouteBuilder[Req, Res], status int) *RouteBuilder[Req, Res] {
+	schemaName := getSchemaName[T]()
+	RegisterModel(schemaName, new(T))
+
+	if b.responseSchemaNames == nil {
+		b.responseSchemaNames = make(map[int]string)
+	}
+	b.responseSchemaNames[status] = schemaName
+	b.syncSpec()
+	return b
+}
+
+func getSchemaName[T any]() string {
+	var zero T
+	t := reflect.TypeOf(zero)
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+
+	pkgPath := t.PkgPath()
+	typeName := t.Name()
+
+	// Для main-пакета или пустого пути берём только имя
+	if pkgPath == "" || pkgPath == "main" {
+		return typeName
+	}
+
+	// Берём имя последней папки (models, errors, dto, api и т.д.)
+	pkgName := path.Base(pkgPath)
+	return pkgName + "." + typeName
 }

@@ -24,19 +24,12 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(user)
 }
 
-func init() {
-	nooa.RegisterModel[models.User]("User")
-	nooa.RegisterModel[models.CreateUserRequest]("CreateUserRequest")
-}
-
 func main() {
 	mux := http.NewServeMux()
 
 	nooa.NewRoute[models.CreateUserRequest, models.User]("POST", "/users", createUser).
 		Summary("Register new user").
 		Tags("Users").
-		RequestBodySchema("CreateUserRequest").
-		ResponseSchema(201, "User").
 		OnSuccess(201, "User created successfully").
 		OnClientErr(400, "Validation failed").
 		Register(mux)
