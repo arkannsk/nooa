@@ -19,7 +19,7 @@ type Info struct {
 type SpecTransformer func(spec map[string]any) map[string]any
 
 // buildSpecFromData собирает spec из переданных данных (без глобальных переменных)
-func buildSpecFromData(info Info, routes []RouteSpec, schemas map[string]*oa.Schema) map[string]any {
+func buildSpecFromData(info Info, routes []RouteSpec, schemas map[string]*oa.Schema, errorSchemas map[int]*errorSchema) map[string]any {
 	spec := map[string]any{
 		"openapi": "3.0.3",
 		"info":    info,
@@ -108,21 +108,41 @@ func buildSpecFromData(info Info, routes []RouteSpec, schemas map[string]*oa.Sch
 				if hasSchema && schemaName != "" {
 					schemaObj = map[string]any{"$ref": "#/components/schemas/" + schemaName}
 				} else {
-					schemaObj = map[string]any{"type": "object"}
-					if isBinaryContentType(ct) {
-						schemaObj = map[string]any{"type": "string", "format": "binary"}
+					// Если это ошибка и есть зарегистрированная схема — подтягиваем её
+					if resp.IsError {
+						if es := lookupErrorSchema(errorSchemas, resp.Status); es != nil && es.schemaName != "" {
+							schemaObj = map[string]any{"$ref": "#/components/schemas/" + es.schemaName}
+						} else {
+							schemaObj = map[string]any{"type": "object"}
+							if isBinaryContentType(ct) {
+								schemaObj = map[string]any{"type": "string", "format": "binary"}
+							}
+						}
+					} else {
+						schemaObj = map[string]any{"type": "object"}
+						if isBinaryContentType(ct) {
+							schemaObj = map[string]any{"type": "string", "format": "binary"}
+						}
 					}
 				}
 				content[ct] = map[string]any{"schema": schemaObj}
 			}
 
+			// Описание: если это ошибка и есть зарегистрированная схема — используем её описание
+			desc := resp.Description
+			if resp.IsError {
+				if es := lookupErrorSchema(errorSchemas, resp.Status); es != nil {
+					desc = es.description
+				}
+			}
+
 			if len(content) > 0 {
 				resps[code] = map[string]any{
-					"description": resp.Description,
+					"description": desc,
 					"content":     content,
 				}
 			} else {
-				resps[code] = map[string]any{"description": resp.Description}
+				resps[code] = map[string]any{"description": desc}
 			}
 		}
 
@@ -138,4 +158,9 @@ func isBinaryContentType(ct string) bool {
 		return true
 	}
 	return strings.Contains(ct, "octet") || strings.Contains(ct, "image/")
+}
+
+// lookupErrorSchema ищет зарегистрированную схему ошибки по статусу.
+func lookupErrorSchema(errorSchemas map[int]*errorSchema, status int) *errorSchema {
+	return errorSchemas[status]
 }

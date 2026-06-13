@@ -2,17 +2,25 @@ package nooa
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
+	"path"
+	"reflect"
 	"sync"
 
 	oa "github.com/arkannsk/elval/pkg/openapi"
 )
 
+// errorSchema — внутреннее представление зарегистрированной ошибки.
+type errorSchema struct {
+	schemaName  string // имя схемы в components/schemas
+	description string // описание ошибки
+}
+
 // Spec — изолированный генератор OpenAPI спецификации для одной версии/группы.
 type Spec struct {
 	routes       []RouteSpec
 	schemas      map[string]*oa.Schema
+	errors       map[int]*errorSchema
 	info         Info
 	transformers []SpecTransformer
 	mu           sync.RWMutex
@@ -24,6 +32,7 @@ type Spec struct {
 func NewSpec(info Info) *Spec {
 	return &Spec{
 		schemas: make(map[string]*oa.Schema),
+		errors:  make(map[int]*errorSchema),
 		info:    info,
 	}
 }
@@ -33,6 +42,7 @@ func (s *Spec) RegisterModel(name string, instance any) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	registerModelInternal(s.schemas, name, instance)
+	s.generated = false
 }
 
 // AddRoute добавляет маршрут в спецификацию.
@@ -54,13 +64,12 @@ func (s *Spec) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // generate строит JSON один раз при первом запросе (thread-safe).
 func (s *Spec) generate() []byte {
 	if !s.generated {
-		specMap := buildSpecFromData(s.info, s.routes, s.schemas)
+		specMap := buildSpecFromData(s.info, s.routes, s.schemas, s.errors)
 		for _, t := range s.transformers {
 			specMap = t(specMap)
 		}
 		data, err := json.MarshalIndent(specMap, "", "  ")
 		if err != nil {
-			log.Printf("❌ Error generating spec for %s: %v", s.info.Title, err)
 			data = []byte(`{"openapi":"3.0.3","info":{"title":"Error","version":"0.0"}}`)
 		}
 		s.mu.Lock()
@@ -77,4 +86,46 @@ func (s *Spec) SetTransformers(transformers ...SpecTransformer) {
 	defer s.mu.Unlock()
 	s.transformers = transformers
 	s.generated = false
+}
+
+// AddError регистрирует ошибку на уровне спецификации.
+// Модель автоматически добавляется в schemas; имя схемы вычисляется из типа.
+// Статус коды рекомендуется брать из констант net/http (http.StatusBadRequest и т.д.).
+// После регистрации можно привязать ошибку к роуту через Route.PossibleErr(status...).
+//
+//	spec.AddError(http.StatusBadRequest, new(models.ValidationError), "Validation failed")
+func (s *Spec) AddError(status int, model any, description string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Определяем имя схемы из типа модели
+	t := reflect.TypeOf(model)
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	pkgPath := t.PkgPath()
+	typeName := t.Name()
+
+	var schemaName string
+	if pkgPath == "" || pkgPath == "main" {
+		schemaName = typeName
+	} else {
+		schemaName = path.Base(pkgPath) + "." + typeName
+	}
+
+	// Регистрируем модель в схемах
+	registerModelInternal(s.schemas, schemaName, model)
+
+	s.errors[status] = &errorSchema{
+		schemaName:  schemaName,
+		description: description,
+	}
+	s.generated = false
+}
+
+// LookupError возвращает зарегистрированную ошибку по статусу.
+func (s *Spec) LookupError(status int) *errorSchema {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.errors[status]
 }

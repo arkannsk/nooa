@@ -49,6 +49,8 @@ var (
 	}()
 )
 
+var ()
+
 var (
 	CreateUserRequest_NameValidator = func() *validator.FieldValidator[string] {
 		v := validator.New[string]("Name")
@@ -96,6 +98,17 @@ func (v *User) Validate() error {
 	}
 	if err = User_RoleValidator.Validate(v.Role); err != nil {
 		return err
+	}
+	return err
+}
+
+func (v *APIError) Validate() error {
+	var err *errs.ValidationError
+	if v.Title == "" {
+		return errs.NewValidationError("Title", "required", "field is required")
+	}
+	if v.Detail == "" {
+		return errs.NewValidationError("Detail", "required", "field is required")
 	}
 	return err
 }

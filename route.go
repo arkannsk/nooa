@@ -47,6 +47,7 @@ type RouteSpec struct {
 	Extensions            map[string]any
 	RequestBodySchemaName string
 	ResponseSchemaNames   map[int]string // [Status Code] -> Schema Name
+	ErrorStatuses         []int          // статусы, для которых подтягиваются глобальные схемы ошибок из Spec
 }
 
 type RouteBuilder[Req, Res any] struct {
@@ -65,6 +66,7 @@ type RouteBuilder[Req, Res any] struct {
 	extensions            map[string]any
 	requestBodySchemaName string
 	responseSchemaNames   map[int]string
+	errorStatuses         []int
 }
 
 func NewRoute[Req, Res any](method, path string, handler http.HandlerFunc) *RouteBuilder[Req, Res] {
@@ -132,6 +134,7 @@ func (b *RouteBuilder[Req, Res]) syncSpec() {
 	b.spec.Security = append([]SecurityRequirement(nil), b.security...)
 	b.spec.RequestContentType = append([]string(nil), b.requestContentType...)
 	b.spec.Responses = append([]ResponseSpec(nil), b.responses...)
+	b.spec.ErrorStatuses = append([]int(nil), b.errorStatuses...)
 	b.spec.Handler = b.handler
 	b.spec.RequestBodySchemaName = b.requestBodySchemaName
 
@@ -275,6 +278,18 @@ func (b *RouteBuilder[Req, Res]) OnNoContent(status int, desc string) *RouteBuil
 	return b
 }
 
+// PossibleErr привязывает зарегистрированные в Spec ошибки к роуту.
+// Статусы должны быть предварительно зарегистрированы через Spec.AddError или Spec.AddErrorSchema.
+// Рекомендуется использовать константы из пакета net/http (http.StatusBadRequest и т.д.).
+func (b *RouteBuilder[Req, Res]) PossibleErr(statuses ...int) *RouteBuilder[Req, Res] {
+	for _, status := range statuses {
+		b.errorStatuses = append(b.errorStatuses, status)
+		b.addResponse(status, "Error", []string{CTProblemJSON}, true)
+	}
+	b.syncSpec()
+	return b
+}
+
 func (b *RouteBuilder[Req, Res]) addResponse(status int, desc string, ct []string, isError bool) {
 	if len(ct) == 0 {
 		ct = []string{CTJSON}
@@ -360,7 +375,9 @@ func (b *RouteBuilder[Req, Res]) RegisterSpec(spec *Spec) *RouteBuilder[Req, Res
 
 		// Важно: регистрируем модели в Spec, а не глобально
 		spec.RegisterModel(reqName, new(Req))
-		spec.RegisterModel(resName, new(Res))
+		if reqName != resName {
+			spec.RegisterModel(resName, new(Res))
+		}
 
 		// Добавляем роут в Spec
 		spec.AddRoute(b.Spec())
