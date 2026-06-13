@@ -11,9 +11,16 @@ install:
 gen: install
 	go generate ./...
 
+gen-spec: install
+	elval-gen gen -i ./examples -openapi
+
 # Запуск всех тестов
 test:
 	go test ./... -v
+
+clean:
+	@find ./ -name "*.gen.go" -delete
+	@find ./ -name "*.debug.go" -delete
 
 swagger-ui:
 	@echo "Downloading Swagger UI $(SWAGGER_VERSION)..."

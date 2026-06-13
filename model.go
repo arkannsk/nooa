@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/arkannsk/elval/pkg/oa"
+	oa "github.com/arkannsk/elval/pkg/openapi"
 )
 
 // Глобальная мапа для обратной совместимости со старым API (SpecMiddleware)
@@ -57,15 +57,12 @@ func registerModelInternal(schemas map[string]*oa.Schema, name string, instance 
 		data, _ := json.Marshal(results[0].Interface())
 		schema = &oa.Schema{}
 		json.Unmarshal(data, schema)
-		log.Printf("⚠️ OaSchema fallback used for %T", instance)
 	}
 
 	// Проверка на коллизию ключей внутри конкретной мапы схем
 	if _, exists := schemas[name]; exists {
 		fullRef := t.PkgPath() + "." + t.Name()
 		name = sanitizeGlobalRefForOpenAPI(fullRef)
-		// TODO local logger
-		// log.Printf("⚠️ Collision resolved: %s → %s", name, name)
 	}
 
 	schema.Ref = "" // Очищаем $ref для компонентов
@@ -75,11 +72,6 @@ func registerModelInternal(schemas map[string]*oa.Schema, name string, instance 
 // RegisterModel (глобальная функция) для обратной совместимости
 func RegisterModel(name string, instance any) {
 	registerModelInternal(modelSchemas, name, instance)
-}
-
-// GetRegisteredSchemas (глобальная функция) для обратной совместимости
-func GetRegisteredSchemas() map[string]*oa.Schema {
-	return modelSchemas
 }
 
 func sanitizeGlobalRefForOpenAPI(ref string) string {

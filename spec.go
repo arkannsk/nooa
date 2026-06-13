@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/arkannsk/elval/pkg/oa"
+	oa "github.com/arkannsk/elval/pkg/openapi"
 )
 
 // Spec — изолированный генератор OpenAPI спецификации для одной версии/группы.

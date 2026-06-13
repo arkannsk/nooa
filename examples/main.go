@@ -69,7 +69,6 @@ func main() {
 		Summary("Register new user (v2)").
 		Tags("Users").
 		OnSuccess(200, "User updated/created").
-		OnClientErr(400, "Validation failed").
 		Register(mux).
 		RegisterSpec(v2Spec)
 

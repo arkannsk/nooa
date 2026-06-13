@@ -1,15 +1,11 @@
 package nooa
 
 import (
-	"encoding/json"
-	"fmt"
-	"log"
-	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
 
-	"github.com/arkannsk/elval/pkg/oa"
+	oa "github.com/arkannsk/elval/pkg/openapi"
 )
 
 // Info содержит метаданные для OpenAPI спецификации.
@@ -35,7 +31,7 @@ func buildSpecFromData(info Info, routes []RouteSpec, schemas map[string]*oa.Sch
 	}
 
 	paths := spec["paths"].(map[string]any)
-	pathParamRegex := regexp.MustCompile(`\{([^}]+)\}`)
+	pathParamRegex := regexp.MustCompile(`\{([^}]+)}`)
 
 	for _, r := range routes {
 		pathItem, ok := paths[r.Path].(map[string]any)
@@ -142,97 +138,4 @@ func isBinaryContentType(ct string) bool {
 		return true
 	}
 	return strings.Contains(ct, "octet") || strings.Contains(ct, "image/")
-}
-
-// GenerateSpecAtStartup генерирует финальный JSON спецификации (глобальный способ).
-func GenerateSpecAtStartup(info Info, transformers ...SpecTransformer) ([]byte, error) {
-	spec := buildBaseSpec(info) // Используем старый buildBaseSpec для глобального режима
-	for _, t := range transformers {
-		spec = t(spec)
-	}
-	return json.MarshalIndent(spec, "", "  ")
-}
-
-// buildBaseSpec собирает базовую структуру OpenAPI из глобальных реестров.
-func buildBaseSpec(info Info) map[string]any {
-	schemas := GetRegisteredSchemas()
-	routes := RegisteredRoutes()
-	return buildSpecFromData(info, routes, schemas)
-}
-
-// SpecMiddleware создает HTTP-мидлвару для отдачи спецификации по пути /openapi.json.
-func SpecMiddleware(next http.Handler, info Info, transformers ...SpecTransformer) http.Handler {
-	schemas := GetRegisteredSchemas()
-	if len(schemas) == 0 {
-		fmt.Println("️  WARNING: No schemas found! Make sure RegisterModel[] is called in init().")
-	}
-
-	specJSON, err := GenerateSpecAtStartup(info, transformers...)
-	if err != nil {
-		log.Printf("❌ Error generating spec: %v", err)
-		specJSON = []byte(`{"openapi":"3.0.3","info":{"title":"Error","version":"0.0"},"paths":{},"components":{"schemas":{}}}`)
-	}
-
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/openapi.json" {
-			w.Header().Set("Content-Type", "application/json")
-			w.Header().Set("Cache-Control", "public, max-age=3600")
-			_, _ = w.Write(specJSON)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
-// WithSecuritySchemes добавляет глобальные схемы безопасности.
-func WithSecuritySchemes(schemes map[string]any) SpecTransformer {
-	return func(spec map[string]any) map[string]any {
-		comp, ok := spec["components"].(map[string]any)
-		if !ok {
-			comp = make(map[string]any)
-			spec["components"] = comp
-		}
-		comp["securitySchemes"] = schemes
-		return spec
-	}
-}
-
-// FilterByTag удаляет пути, содержащие указанный тег.
-func FilterByTag(excludeTag string) SpecTransformer {
-	return func(spec map[string]any) map[string]any {
-		paths, ok := spec["paths"].(map[string]any)
-		if !ok {
-			return spec
-		}
-		for path, pathItem := range paths {
-			itemMap, ok := pathItem.(map[string]any)
-			if !ok {
-				continue
-			}
-			needDelete := false
-			for method, op := range itemMap {
-				if method == "parameters" {
-					continue
-				}
-				opMap, ok := op.(map[string]any)
-				if !ok {
-					continue
-				}
-				tags, _ := opMap["tags"].([]any)
-				for _, t := range tags {
-					if tStr, ok := t.(string); ok && tStr == excludeTag {
-						needDelete = true
-						break
-					}
-				}
-				if needDelete {
-					break
-				}
-			}
-			if needDelete {
-				delete(paths, path)
-			}
-		}
-		return spec
-	}
 }
