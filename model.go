@@ -74,6 +74,8 @@ func registerNestedTypes(schemas map[string]*oa.Schema, typ reflect.Type, parent
 }
 
 // walkType обходит тип поля и регистрирует вложенные структуры.
+// Если тип — generic struct (например Option[T]), рекурсивно обходит его поля
+// чтобы обнаружить скрытые schemaProvider'ы в конкретизированных type arguments.
 func walkType(schemas map[string]*oa.Schema, typ reflect.Type, parentName string) {
 	if typ.Kind() == reflect.Ptr {
 		typ = typ.Elem()
@@ -83,13 +85,21 @@ func walkType(schemas map[string]*oa.Schema, typ reflect.Type, parentName string
 	case reflect.Struct:
 		// Проверяет, реализует ли этот тип schemaProvider
 		var zeroVal any = reflect.New(typ).Interface()
-		if sp, ok := zeroVal.(schemaProvider); ok {
+		sp, isSP := zeroVal.(schemaProvider)
+		if isSP {
 			ref := sp.GlobalRef()
 			shortName := extractShortName(ref)
 			schema := sp.OaSchema()
 			if registerSchema(schemas, shortName, schema) {
 				registerNestedTypes(schemas, typ, shortName)
 			}
+		}
+
+		// Если тип не реализует schemaProvider (например generic обёртка Option[T]),
+		// обходим его поля, чтобы обнаружить вложенные schemaProvider'ы.
+		// Это позволяет автоматически регистрировать типы, скрытые внутри generics.
+		if !isSP {
+			walkStructFields(schemas, typ, parentName)
 		}
 
 	case reflect.Slice, reflect.Array:
@@ -104,13 +114,18 @@ func walkType(schemas map[string]*oa.Schema, typ reflect.Type, parentName string
 		}
 		if unwrapped.Kind() == reflect.Struct {
 			zeroVal := reflect.New(unwrapped).Interface()
-			if sp, ok := zeroVal.(schemaProvider); ok {
+			sp, isSP := zeroVal.(schemaProvider)
+			if isSP {
 				ref := sp.GlobalRef()
 				shortName := extractShortName(ref)
 				schema := sp.OaSchema()
 				if registerSchema(schemas, shortName, schema) {
 					registerNestedTypes(schemas, unwrapped, shortName)
 				}
+			}
+			// Если элемент — generic обёртка без schemaProvider, обходим его поля
+			if !isSP {
+				walkStructFields(schemas, unwrapped, parentName)
 			}
 		}
 
@@ -126,7 +141,8 @@ func walkType(schemas map[string]*oa.Schema, typ reflect.Type, parentName string
 		}
 		if unwrapped.Kind() == reflect.Struct {
 			zeroVal := reflect.New(unwrapped).Interface()
-			if sp, ok := zeroVal.(schemaProvider); ok {
+			sp, isSP := zeroVal.(schemaProvider)
+			if isSP {
 				ref := sp.GlobalRef()
 				shortName := extractShortName(ref)
 				schema := sp.OaSchema()
@@ -134,7 +150,22 @@ func walkType(schemas map[string]*oa.Schema, typ reflect.Type, parentName string
 					registerNestedTypes(schemas, unwrapped, shortName)
 				}
 			}
+			// Если значение — generic обёртка без schemaProvider, обходим его поля
+			if !isSP {
+				walkStructFields(schemas, unwrapped, parentName)
+			}
 		}
+	}
+}
+
+// walkStructFields рекурсивно обходит поля структуры, вызывая walkType для каждого.
+// В отличие от registerNestedTypes, обходит все поля (включая неэкспортированные),
+// потому что в generic обёртках тип-аргументы часто хранятся в неэкспортированных полях
+// (например value T в Option[T]).
+func walkStructFields(schemas map[string]*oa.Schema, typ reflect.Type, parentName string) {
+	for i := 0; i < typ.NumField(); i++ {
+		f := typ.Field(i)
+		walkType(schemas, f.Type, parentName)
 	}
 }
 

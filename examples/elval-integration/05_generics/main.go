@@ -41,10 +41,6 @@ func main() {
 		Description: "Integration example: generic types (Option, Result, custom generics)",
 	})
 
-	// Явно регистрируем Item, так как он скрыт внутри дженерика Option[Item]
-	// и не обнаруживается через рефлексию автоматически.
-	spec.RegisterModel("05_generics.Item", new(gen.Item))
-
 	nooa.NewRoute[gen.GenericStruct, gen.GenericStruct](
 		"GET", "/generic", handleGenericStruct).
 		Summary("Get generic struct").
