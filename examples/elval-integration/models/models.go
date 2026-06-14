@@ -39,6 +39,23 @@ type User struct {
 	Role string `json:"role"`
 }
 
+// APIError — стандартный ответ об ошибке (RFC 7807 Problem Details).
+type APIError struct {
+	// @evl:validate required
+	// @oa:description "A short, human-readable summary of the problem type"
+	// @oa:example "Validation failed"
+	Title string `json:"title"`
+
+	// @evl:validate required
+	// @oa:description "A human-readable explanation specific to this occurrence"
+	// @oa:example "Field 'email' is required"
+	Detail string `json:"detail"`
+
+	// @oa:description "HTTP status code"
+	// @oa:example 400
+	Status int `json:"status"`
+}
+
 // CreateUserRequest — запрос на создание пользователя.
 type CreateUserRequest struct {
 	// @evl:validate required

@@ -4,18 +4,18 @@
 package models
 
 import (
-	oa "github.com/arkannsk/elval/pkg/oa"
+	oa "github.com/arkannsk/elval/pkg/openapi"
 )
 
 func (v *User) OaSchema() *oa.Schema {
 	schema := &oa.Schema{
 		Type:       "object",
-		Properties: make(map[string]oa.Schema, 5),
+		Properties: make(map[string]*oa.Schema, 5),
 		Required:   make([]string, 0, 5),
 		Ref:        v.GlobalRef(),
 	}
 	{
-		prop := oa.Schema{}
+		prop := &oa.Schema{}
 
 		prop.Type = "string"
 
@@ -29,7 +29,7 @@ func (v *User) OaSchema() *oa.Schema {
 		schema.Properties["id"] = prop
 	}
 	{
-		prop := oa.Schema{}
+		prop := &oa.Schema{}
 
 		prop.Type = "string"
 
@@ -44,7 +44,7 @@ func (v *User) OaSchema() *oa.Schema {
 		schema.Properties["name"] = prop
 	}
 	{
-		prop := oa.Schema{}
+		prop := &oa.Schema{}
 
 		prop.Type = "string"
 
@@ -57,7 +57,7 @@ func (v *User) OaSchema() *oa.Schema {
 		schema.Properties["email"] = prop
 	}
 	{
-		prop := oa.Schema{}
+		prop := &oa.Schema{}
 
 		prop.Minimum = oa.Ptr[float64](18)
 		prop.Maximum = oa.Ptr[float64](120)
@@ -67,12 +67,12 @@ func (v *User) OaSchema() *oa.Schema {
 		schema.Properties["age"] = prop
 	}
 	{
-		prop := oa.Schema{}
+		prop := &oa.Schema{}
 
 		prop.Type = "string"
 
 		schema.Required = append(schema.Required, "role")
-		prop.Enum = []interface{}{"admin", "user", "moderator"}
+		prop.Enum = []any{"admin", "user", "moderator"}
 
 		prop.Description = "User role in the system"
 
@@ -86,15 +86,64 @@ func (v *User) GlobalRef() string {
 	return "github.com/arkannsk/nooa/examples/elval-integration/models.User"
 }
 
+func (v *APIError) OaSchema() *oa.Schema {
+	schema := &oa.Schema{
+		Type:       "object",
+		Properties: make(map[string]*oa.Schema, 3),
+		Required:   make([]string, 0, 3),
+		Ref:        v.GlobalRef(),
+	}
+	{
+		prop := &oa.Schema{}
+
+		prop.Type = "string"
+
+		schema.Required = append(schema.Required, "title")
+
+		prop.Description = "A short, human-readable summary of the problem type"
+		prop.Example = "Validation failed"
+
+		schema.Properties["title"] = prop
+	}
+	{
+		prop := &oa.Schema{}
+
+		prop.Type = "string"
+
+		schema.Required = append(schema.Required, "detail")
+
+		prop.Description = "A human-readable explanation specific to this occurrence"
+		prop.Example = "Field 'email' is required"
+
+		schema.Properties["detail"] = prop
+	}
+	{
+		prop := &oa.Schema{}
+
+		prop.Type = "integer"
+
+		prop.Description = "HTTP status code"
+		prop.Example = "400"
+
+		schema.Properties["status"] = prop
+	}
+
+	return schema
+}
+
+func (v *APIError) GlobalRef() string {
+	return "github.com/arkannsk/nooa/examples/elval-integration/models.APIError"
+}
+
 func (v *CreateUserRequest) OaSchema() *oa.Schema {
 	schema := &oa.Schema{
 		Type:       "object",
-		Properties: make(map[string]oa.Schema, 4),
+		Properties: make(map[string]*oa.Schema, 4),
 		Required:   make([]string, 0, 4),
 		Ref:        v.GlobalRef(),
 	}
 	{
-		prop := oa.Schema{}
+		prop := &oa.Schema{}
 
 		prop.Type = "string"
 
@@ -106,7 +155,7 @@ func (v *CreateUserRequest) OaSchema() *oa.Schema {
 		schema.Properties["name"] = prop
 	}
 	{
-		prop := oa.Schema{}
+		prop := &oa.Schema{}
 
 		prop.Type = "string"
 
@@ -118,14 +167,14 @@ func (v *CreateUserRequest) OaSchema() *oa.Schema {
 		schema.Properties["email"] = prop
 	}
 	{
-		prop := oa.Schema{}
+		prop := &oa.Schema{}
 
 		prop.Example = "25"
 
 		schema.Properties["age"] = prop
 	}
 	{
-		prop := oa.Schema{}
+		prop := &oa.Schema{}
 
 		prop.Type = "string"
 

@@ -4,7 +4,6 @@
 package models
 
 import (
-	"context"
 	errs "github.com/arkannsk/elval/pkg/errs"
 	validator "github.com/arkannsk/elval/pkg/validator"
 )
@@ -50,6 +49,8 @@ var (
 	}()
 )
 
+var ()
+
 var (
 	CreateUserRequest_NameValidator = func() *validator.FieldValidator[string] {
 		v := validator.New[string]("Name")
@@ -64,76 +65,67 @@ var (
 		v.AddRule(validator.Email())
 		return v
 	}()
-
-	CreateUserRequest_AgeValidator = func() *validator.FieldValidator[int] {
-		v := validator.New[int]("Age")
-		original := v
-		v = validator.New[int]("Age")
-		v.AddRule(validator.SkipIfZero(original.Validate))
-		return v
-	}()
 )
-
-func (v *User) Decorate(ctx context.Context) error {
-
-	return nil
-}
-
-func (v *CreateUserRequest) Decorate(ctx context.Context) error {
-
-	return nil
-}
 
 func (v *User) Validate() error {
 	var err *errs.ValidationError
+	if v.ID == "" {
+		return errs.NewValidationError("ID", "required", "field is required")
+	}
 	if err = User_IDValidator.Validate(v.ID); err != nil {
 		return err
+	}
+	if v.Name == "" {
+		return errs.NewValidationError("Name", "required", "field is required")
 	}
 	if err = User_NameValidator.Validate(v.Name); err != nil {
 		return err
 	}
+	if v.Email == "" {
+		return errs.NewValidationError("Email", "required", "field is required")
+	}
 	if err = User_EmailValidator.Validate(v.Email); err != nil {
 		return err
 	}
-
-	// Указатель Age
 	if v.Age != nil {
 		val := *v.Age
-		if err := User_AgeValidator.Validate(val); err != nil {
-			return &errs.ValidationError{
-				Field:   "Age",
-				Rule:    "nested",
-				Message: "поле Age: " + err.Error(),
-			}
+		if err = User_AgeValidator.Validate(val); err != nil {
+			return err
 		}
 	}
-
+	if v.Role == "" {
+		return errs.NewValidationError("Role", "required", "field is required")
+	}
 	if err = User_RoleValidator.Validate(v.Role); err != nil {
 		return err
 	}
-	return nil
+	return err
+}
+
+func (v *APIError) Validate() error {
+	var err *errs.ValidationError
+	if v.Title == "" {
+		return errs.NewValidationError("Title", "required", "field is required")
+	}
+	if v.Detail == "" {
+		return errs.NewValidationError("Detail", "required", "field is required")
+	}
+	return err
 }
 
 func (v *CreateUserRequest) Validate() error {
 	var err *errs.ValidationError
+	if v.Name == "" {
+		return errs.NewValidationError("Name", "required", "field is required")
+	}
 	if err = CreateUserRequest_NameValidator.Validate(v.Name); err != nil {
 		return err
+	}
+	if v.Email == "" {
+		return errs.NewValidationError("Email", "required", "field is required")
 	}
 	if err = CreateUserRequest_EmailValidator.Validate(v.Email); err != nil {
 		return err
 	}
-
-	// Указатель Age
-	if v.Age != nil {
-		val := *v.Age
-		if err := CreateUserRequest_AgeValidator.Validate(val); err != nil {
-			return &errs.ValidationError{
-				Field:   "Age",
-				Rule:    "nested",
-				Message: "поле Age: " + err.Error(),
-			}
-		}
-	}
-
-	return nil
+	return err
 }
