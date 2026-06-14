@@ -10,29 +10,57 @@ import (
 // RegisterRedoc mounts Redoc UI for the given spec at the standard path.
 // For no prefix: /redoc/
 // For versioned: /redoc/{version}/
+// registerDocUI mounts a documentation UI handler at a given base path.
+func registerDocUI(baseName, versionPrefix, jsonPath string, handler http.Handler, mux *http.ServeMux) {
+	prefix := strings.Trim(versionPrefix, "/")
+
+	var base string
+	if prefix == "" {
+		base = "/" + baseName
+	} else {
+		base = "/" + baseName + "/" + prefix
+	}
+
+	mux.Handle(base+"/", handler)
+
+	mux.HandleFunc(base, func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, base+"/", http.StatusMovedPermanently)
+	})
+}
+
+// RegisterRedoc mounts Redoc UI for the given spec.
+// For no prefix: /redoc/
+// For versioned: /redoc/{version}/
 func RegisterRedoc(versionPrefix string, spec *Spec, mux *http.ServeMux) {
 	if spec == nil || mux == nil {
 		return
 	}
 
 	prefix := strings.Trim(versionPrefix, "/")
+	jsonPath := getJSONPath(prefix)
 
-	var jsonPath, redocBase string
+	registerDocUI("redoc", versionPrefix, jsonPath, RedocUIHandler("/redoc", jsonPath), mux)
+}
 
-	if prefix == "" {
-		jsonPath = "/openapi.json"
-		redocBase = "/redoc"
-	} else {
-		jsonPath = "/" + prefix + "/openapi.json"
-		redocBase = "/redoc/" + prefix
+// RegisterScalar mounts Scalar UI for the given spec.
+// For no prefix: /scalar/
+// For versioned: /scalar/{version}/
+func RegisterScalar(versionPrefix string, spec *Spec, mux *http.ServeMux) {
+	if spec == nil || mux == nil {
+		return
 	}
 
-	redocHandler := RedocUIHandler(redocBase, jsonPath)
-	mux.Handle(redocBase+"/", redocHandler)
+	prefix := strings.Trim(versionPrefix, "/")
+	jsonPath := getJSONPath(prefix)
 
-	mux.HandleFunc(redocBase, func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, redocBase+"/", http.StatusMovedPermanently)
-	})
+	registerDocUI("scalar", versionPrefix, jsonPath, ScalarUIHandler("/scalar", jsonPath), mux)
+}
+
+func getJSONPath(prefix string) string {
+	if prefix == "" {
+		return "/openapi.json"
+	}
+	return "/" + prefix + "/openapi.json"
 }
 
 func RegisterVersionedAPI(versionPrefix string, spec *Spec, mux *http.ServeMux) {
