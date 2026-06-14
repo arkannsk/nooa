@@ -92,9 +92,11 @@ func main() {
 		RegisterSpecAndMux(mux, spec)
 
 	nooa.RegisterVersionedAPI("", spec, mux)
+	nooa.RegisterRedoc("", spec, mux)
 
 	log.Println("Server starting on http://localhost:9095")
 	log.Println("Swagger UI: http://localhost:9095/docs/")
+	log.Println("Redoc UI:   http://localhost:9095/redoc/")
 	log.Println("Raw JSON:   http://localhost:9095/openapi.json")
 	log.Fatal(http.ListenAndServe(":9095", mux))
 }

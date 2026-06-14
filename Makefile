@@ -5,6 +5,10 @@ SWAGGER_URL := https://github.com/swagger-api/swagger-ui/archive/refs/tags/$(SWA
 SWAGGER_TMP_DIR := /tmp/swagger-ui-dist
 SWAGGER_DEST_DIR := static/swagger
 
+REDOC_VERSION := v2.5.3
+REDOC_URL := https://cdn.redoc.ly/redoc/$(REDOC_VERSION)/bundles/redoc.standalone.js
+REDOC_DEST_DIR := static/redoc
+
 install:
 	go install github.com/arkannsk/elval/cmd/elval-gen@latest
 
@@ -49,3 +53,10 @@ swagger-ui:
 	@echo "Swagger UI installed and patched successfully!"
 	@echo "IMPORTANT: Restart your Go server to embed changes."
 
+redoc:
+	@echo "Downloading Redoc $(REDOC_VERSION)..."
+	@mkdir -p $(REDOC_DEST_DIR)
+	@curl -sL $(REDOC_URL) -o $(REDOC_DEST_DIR)/redoc.standalone.js
+	@echo '<!DOCTYPE html>\n<html>\n<head>\n  <meta charset="UTF-8">\n  <title>API Documentation</title>\n  <style>\n    body { margin: 0; padding: 0; }\n  </style>\n</head>\n<body>\n  <redoc spec-url="{{SPEC_URL}}"></redoc>\n  <script src="./redoc.standalone.js"></script>\n</body>\n</html>' > $(REDOC_DEST_DIR)/index.html
+	@echo "Redoc installed successfully!"
+	@echo "IMPORTANT: Restart your Go server to embed changes."

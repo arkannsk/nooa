@@ -7,6 +7,34 @@ import (
 
 // RegisterVersionedAPI регистрирует изолированную спецификацию API для указанной версии.
 // versionPrefix: префикс версии (например "v1"). Если пустая строка "", используется корень.
+// RegisterRedoc mounts Redoc UI for the given spec at the standard path.
+// For no prefix: /redoc/
+// For versioned: /redoc/{version}/
+func RegisterRedoc(versionPrefix string, spec *Spec, mux *http.ServeMux) {
+	if spec == nil || mux == nil {
+		return
+	}
+
+	prefix := strings.Trim(versionPrefix, "/")
+
+	var jsonPath, redocBase string
+
+	if prefix == "" {
+		jsonPath = "/openapi.json"
+		redocBase = "/redoc"
+	} else {
+		jsonPath = "/" + prefix + "/openapi.json"
+		redocBase = "/redoc/" + prefix
+	}
+
+	redocHandler := RedocUIHandler(redocBase, jsonPath)
+	mux.Handle(redocBase+"/", redocHandler)
+
+	mux.HandleFunc(redocBase, func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, redocBase+"/", http.StatusMovedPermanently)
+	})
+}
+
 func RegisterVersionedAPI(versionPrefix string, spec *Spec, mux *http.ServeMux) {
 	if spec == nil || mux == nil {
 		return

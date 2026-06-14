@@ -12,6 +12,9 @@ import (
 //go:embed static/swagger/*
 var swaggerFS embed.FS
 
+//go:embed static/redoc/*
+var redocFS embed.FS
+
 func SwaggerUIHandler(basePrefix string, specURL string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
@@ -40,7 +43,7 @@ func SwaggerUIHandler(basePrefix string, specURL string) http.Handler {
 		// Открываем файл из embedded FS
 		f, err := swaggerFS.Open("static/swagger/" + filePath)
 		if err != nil {
-			log.Printf("❌ ERROR: File not found in embed: static/swagger/%s. Err: %v", filePath, err)
+			log.Printf("ERROR: File not found in embed: static/swagger/%s. Err: %v", filePath, err)
 			http.NotFound(w, r)
 			return
 		}
@@ -80,6 +83,75 @@ func SwaggerUIHandler(basePrefix string, specURL string) http.Handler {
 		}
 
 		// Для остальных файлов просто копируем контент
+		_, err = io.Copy(w, f)
+		if err != nil {
+			log.Printf("Error copying %s to response: %v", filePath, err)
+		}
+	})
+}
+
+func RedocUIHandler(basePrefix string, specURL string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+
+		cleanPath := strings.TrimSuffix(path, "/")
+
+		// Редирект на index.html если пришел на корень префикса
+		if cleanPath == basePrefix || path == basePrefix+"/" {
+			http.Redirect(w, r, path+"index.html", http.StatusFound)
+			return
+		}
+
+		// Проверка префикса
+		if !strings.HasPrefix(path, basePrefix+"/") && path != basePrefix {
+			http.NotFound(w, r)
+			return
+		}
+
+		// Извлекаем имя файла относительно префикса
+		filePath := strings.TrimPrefix(path, basePrefix+"/")
+
+		if filePath == "" {
+			filePath = "index.html"
+		}
+
+		// Открываем файл из embedded FS
+		f, err := redocFS.Open("static/redoc/" + filePath)
+		if err != nil {
+			log.Printf("ERROR: File not found in embed: static/redoc/%s. Err: %v", filePath, err)
+			http.NotFound(w, r)
+			return
+		}
+		defer f.Close()
+
+		stat, err := f.Stat()
+		isModifiedFile := filePath == "index.html"
+
+		if stat != nil && !isModifiedFile {
+			w.Header().Set("Content-Length", strconv.FormatInt(stat.Size(), 10))
+			if !stat.ModTime().IsZero() {
+				w.Header().Set("Last-Modified", stat.ModTime().UTC().Format(http.TimeFormat))
+			}
+		}
+
+		setContentType(w, filePath)
+
+		if isModifiedFile {
+			data, err := io.ReadAll(f)
+			if err != nil {
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				return
+			}
+
+			content := strings.Replace(string(data), "{{SPEC_URL}}", specURL, -1)
+
+			_, err = w.Write([]byte(content))
+			if err != nil {
+				log.Printf("Error writing response for %s: %v", filePath, err)
+			}
+			return
+		}
+
 		_, err = io.Copy(w, f)
 		if err != nil {
 			log.Printf("Error copying %s to response: %v", filePath, err)
