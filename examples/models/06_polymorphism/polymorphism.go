@@ -7,7 +7,7 @@ package polymorphism
 // @oa:discriminator.mapping "rectangle:RectangleShape"
 // @oa:oneOf "CircleShape,RectangleShape"
 type Shape struct {
-	// @oa:enum "circle","rectangle"
+	// @oa:enum circle,rectangle
 	Type string `json:"type"`
 }
 
@@ -40,9 +40,9 @@ type Container struct {
 
 // OneOfExample — явное oneOf без дискриминатора
 // @oa:description "Value that can be string or number"
-// @oa:oneOf "StringValue,NumberValue"
 type OneOfExample struct {
 	// @oa:description "Flexible value"
+	// @oa:oneOf "StringValue,NumberValue"
 	Value any `json:"value"`
 }
 

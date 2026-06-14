@@ -17,6 +17,10 @@ func (v *MegaStruct) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 10),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Deps = []any{
+		new(UserVariant),
+		new(AdminVariant),
+	}
 	{
 		prop := &oa.Schema{}
 

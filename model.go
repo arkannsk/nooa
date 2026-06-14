@@ -37,6 +37,12 @@ func registerModelInternal(schemas map[string]*oa.Schema, name string, instance 
 		return
 	}
 
+	// Если name пустой (например, регистрация зависимости через OaDependencies),
+	// вычисляем имя из GlobalRef()
+	if name == "" {
+		name = extractShortName(sp.GlobalRef())
+	}
+
 	// Если схема уже зарегистрирована — пропускаем
 	if _, exists := schemas[name]; exists {
 		return
@@ -46,13 +52,18 @@ func registerModelInternal(schemas map[string]*oa.Schema, name string, instance 
 		return
 	}
 
-	// Рекурсивно регистрируем вложенные типы
+	// Рекурсивно регистрируем вложенные типы через рефлексию
 	registerNestedTypes(schemas, reflect.TypeOf(instance), name)
+
+	// Рекурсивно регистрируем зависимости из schema.Deps.
+	// Это заполняется elval-gen для типов с oneOf/allOf/anyOf,
+	// где рефлексия не может обнаружить конкретные варианты (поле типа any).
+	registerDeps(schemas, schema)
 }
 
 // registerNestedTypes рекурсивно находит и регистрирует вложенные типы из полей структуры.
 func registerNestedTypes(schemas map[string]*oa.Schema, typ reflect.Type, parentName string) {
-	if typ.Kind() == reflect.Ptr {
+	if typ.Kind() == reflect.Pointer {
 		typ = typ.Elem()
 	}
 
@@ -60,8 +71,8 @@ func registerNestedTypes(schemas map[string]*oa.Schema, typ reflect.Type, parent
 		return
 	}
 
-	for i := 0; i < typ.NumField(); i++ {
-		f := typ.Field(i)
+	for f := range typ.Fields() {
+		f := f
 		ft := f.Type
 
 		// Пропускаем вложенные (неэкспортированные) поля
@@ -77,7 +88,7 @@ func registerNestedTypes(schemas map[string]*oa.Schema, typ reflect.Type, parent
 // Если тип — generic struct (например Option[T]), рекурсивно обходит его поля
 // чтобы обнаружить скрытые schemaProvider'ы в конкретизированных type arguments.
 func walkType(schemas map[string]*oa.Schema, typ reflect.Type, parentName string) {
-	if typ.Kind() == reflect.Ptr {
+	if typ.Kind() == reflect.Pointer {
 		typ = typ.Elem()
 	}
 
@@ -136,7 +147,7 @@ func walkType(schemas map[string]*oa.Schema, typ reflect.Type, parentName string
 
 		// Регистрируем значение, если оно struct с OaSchema
 		unwrapped := val
-		if unwrapped.Kind() == reflect.Ptr {
+		if unwrapped.Kind() == reflect.Pointer {
 			unwrapped = unwrapped.Elem()
 		}
 		if unwrapped.Kind() == reflect.Struct {
@@ -158,13 +169,26 @@ func walkType(schemas map[string]*oa.Schema, typ reflect.Type, parentName string
 	}
 }
 
+// registerDeps регистрирует зависимости из schema.Deps.
+// Это заполняется elval-gen для типов с oneOf/allOf/anyOf,
+// где рефлексия не может обнаружить конкретные варианты.
+func registerDeps(schemas map[string]*oa.Schema, schema *oa.Schema) {
+	if schema == nil || len(schema.Deps) == 0 {
+		return
+	}
+
+	for _, dep := range schema.Deps {
+		registerModelInternal(schemas, "", dep)
+	}
+}
+
 // walkStructFields рекурсивно обходит поля структуры, вызывая walkType для каждого.
 // В отличие от registerNestedTypes, обходит все поля (включая неэкспортированные),
 // потому что в generic обёртках тип-аргументы часто хранятся в неэкспортированных полях
 // (например value T в Option[T]).
 func walkStructFields(schemas map[string]*oa.Schema, typ reflect.Type, parentName string) {
-	for i := 0; i < typ.NumField(); i++ {
-		f := typ.Field(i)
+	for f := range typ.Fields() {
+		f := f
 		walkType(schemas, f.Type, parentName)
 	}
 }

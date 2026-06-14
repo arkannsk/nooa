@@ -1,5 +1,5 @@
-github.com/arkannsk/elval v0.0.0-20260614074653-d0754c010031 h1:l7KzyZCFfuGRXphHOArjOAjdyUzu+I3KiqJUz3bK+Vg=
-github.com/arkannsk/elval v0.0.0-20260614074653-d0754c010031/go.mod h1:bSS0Ng9uSvBZM59UkWpHiETLYrc+sBvg7ITio7CKVFQ=
+github.com/arkannsk/elval v0.0.0-20260614145237-8b9d8900ba8e h1:6fSoIqIgZtuP0DbsMTAfcTBk45+z2ZO4hpLcKR0hahI=
+github.com/arkannsk/elval v0.0.0-20260614145237-8b9d8900ba8e/go.mod h1:bSS0Ng9uSvBZM59UkWpHiETLYrc+sBvg7ITio7CKVFQ=
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc h1:U9qPSI2PIWSS1VwoXQT9A3Wy9MM3WgvqSxFWenqJduM=
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 h1:Jamvg5psRIccs7FGNTlIRMkT8wgtp5eCXdBlqhYGL6U=

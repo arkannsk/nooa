@@ -1,6 +1,7 @@
 package nooa
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -250,4 +251,21 @@ func TestGlobalRegisterModel(t *testing.T) {
 	s := globalSchemas["test.MockItem"]
 	require.NotNil(t, s)
 	assert.Equal(t, "object", s.Type)
+}
+
+func Test_registerNestedTypes(t *testing.T) {
+	tests := []struct {
+		name string // description of this test case
+		// Named input parameters for target function.
+		schemas    map[string]*oa.Schema
+		typ        reflect.Type
+		parentName string
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			registerNestedTypes(tt.schemas, tt.typ, tt.parentName)
+		})
+	}
 }

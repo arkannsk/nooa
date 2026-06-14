@@ -9,17 +9,15 @@ import (
 
 func (v *Shape) OaSchema() *oa.Schema {
 	schema := &oa.Schema{
-		Type:       "object",
-		Properties: make(map[string]*oa.Schema, 1),
-		Required:   make([]string, 0, 1),
-		Ref:        v.GlobalRef(),
-	}
-	{
-		prop := &oa.Schema{}
-
-		prop.Type = "string"
-
-		schema.Properties["type"] = prop
+		Ref: v.GlobalRef(),
+		OneOf: []*oa.Schema{
+			{Ref: "#/components/schemas/github.com/arkannsk/nooa/examples/models/06_polymorphism.CircleShape"},
+			{Ref: "#/components/schemas/github.com/arkannsk/nooa/examples/models/06_polymorphism.RectangleShape"},
+		},
+		Deps: []any{
+			new(CircleShape),
+			new(RectangleShape),
+		},
 	}
 
 	schema.Discriminator = &oa.Discriminator{
@@ -138,10 +136,19 @@ func (v *OneOfExample) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 1),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Deps = []any{
+		new(StringValue),
+		new(NumberValue),
+	}
 	{
 		prop := &oa.Schema{}
 
 		prop.Description = "Flexible value"
+
+		prop.OneOf = []*oa.Schema{
+			{Ref: "#/components/schemas/github.com/arkannsk/nooa/examples/models/06_polymorphism.StringValue"},
+			{Ref: "#/components/schemas/github.com/arkannsk/nooa/examples/models/06_polymorphism.NumberValue"},
+		}
 
 		schema.Properties["value"] = prop
 	}

@@ -40,11 +40,21 @@ type CircularRefB struct {
 	A *CircularRefA
 }
 
+// StringEdgeValue — строковое значение для oneOf теста
+type StringEdgeValue struct {
+	Value string `json:"value"`
+}
+
+// NumberEdgeValue — числовое значение для oneOf теста
+type NumberEdgeValue struct {
+	Value float64 `json:"value"`
+}
+
 // WithInterface — поле интерфейса (any)
 // @oa:description "Struct with interface field"
 type WithInterface struct {
 	// @oa:description "Flexible value"
-	// @oa:oneOf "StringValue,NumberValue"
+	// @oa:oneOf "StringEdgeValue,NumberEdgeValue"
 	Data any
 }
 

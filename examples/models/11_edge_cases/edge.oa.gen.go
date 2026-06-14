@@ -127,7 +127,7 @@ func (v *CircularRefB) GlobalRef() string {
 	return "github.com/arkannsk/nooa/examples/models/11_edge_cases.CircularRefB"
 }
 
-func (v *WithInterface) OaSchema() *oa.Schema {
+func (v *StringEdgeValue) OaSchema() *oa.Schema {
 	schema := &oa.Schema{
 		Type:       "object",
 		Properties: make(map[string]*oa.Schema, 1),
@@ -137,10 +137,59 @@ func (v *WithInterface) OaSchema() *oa.Schema {
 	{
 		prop := &oa.Schema{}
 
+		prop.Type = "string"
+
+		schema.Properties["value"] = prop
+	}
+
+	return schema
+}
+
+func (v *StringEdgeValue) GlobalRef() string {
+	return "github.com/arkannsk/nooa/examples/models/11_edge_cases.StringEdgeValue"
+}
+
+func (v *NumberEdgeValue) OaSchema() *oa.Schema {
+	schema := &oa.Schema{
+		Type:       "object",
+		Properties: make(map[string]*oa.Schema, 1),
+		Required:   make([]string, 0, 1),
+		Ref:        v.GlobalRef(),
+	}
+	{
+		prop := &oa.Schema{}
+
+		prop.Type = "number"
+
+		schema.Properties["value"] = prop
+	}
+
+	return schema
+}
+
+func (v *NumberEdgeValue) GlobalRef() string {
+	return "github.com/arkannsk/nooa/examples/models/11_edge_cases.NumberEdgeValue"
+}
+
+func (v *WithInterface) OaSchema() *oa.Schema {
+	schema := &oa.Schema{
+		Type:       "object",
+		Properties: make(map[string]*oa.Schema, 1),
+		Required:   make([]string, 0, 1),
+		Ref:        v.GlobalRef(),
+	}
+	schema.Deps = []any{
+		new(StringEdgeValue),
+		new(NumberEdgeValue),
+	}
+	{
+		prop := &oa.Schema{}
+
 		prop.Description = "Flexible value"
+
 		prop.OneOf = []*oa.Schema{
-			{Ref: "#/components/schemas/github.com/arkannsk/nooa/examples/models/11_edge_cases.StringValue"},
-			{Ref: "#/components/schemas/github.com/arkannsk/nooa/examples/models/11_edge_cases.NumberValue"},
+			{Ref: "#/components/schemas/github.com/arkannsk/nooa/examples/models/11_edge_cases.StringEdgeValue"},
+			{Ref: "#/components/schemas/github.com/arkannsk/nooa/examples/models/11_edge_cases.NumberEdgeValue"},
 		}
 
 		schema.Properties["data"] = prop
