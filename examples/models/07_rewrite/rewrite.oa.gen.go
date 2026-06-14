@@ -50,17 +50,9 @@ func (v *WithRewriteType) GlobalRef() string {
 func (v *WithRewriteRef) OaSchema() *oa.Schema {
 	schema := &oa.Schema{
 		Type:       "object",
-		Properties: make(map[string]*oa.Schema, 2),
-		Required:   make([]string, 0, 2),
+		Properties: make(map[string]*oa.Schema, 1),
+		Required:   make([]string, 0, 1),
 		Ref:        v.GlobalRef(),
-	}
-	{
-		prop := &oa.Schema{}
-		prop.Ref = "#/components/schemas/github.com/arkannsk/elval/examples/07_rewrite.ExternalSchema"
-
-		prop.Description = "Reference to external schema"
-
-		schema.Properties["external"] = prop
 	}
 	{
 		prop := &oa.Schema{}
@@ -76,28 +68,6 @@ func (v *WithRewriteRef) OaSchema() *oa.Schema {
 
 func (v *WithRewriteRef) GlobalRef() string {
 	return "github.com/arkannsk/nooa/examples/models/07_rewrite.WithRewriteRef"
-}
-
-func (v *ExternalType) OaSchema() *oa.Schema {
-	schema := &oa.Schema{
-		Type:       "object",
-		Properties: make(map[string]*oa.Schema, 1),
-		Required:   make([]string, 0, 1),
-		Ref:        v.GlobalRef(),
-	}
-	{
-		prop := &oa.Schema{}
-
-		prop.Type = "string"
-
-		schema.Properties["field"] = prop
-	}
-
-	return schema
-}
-
-func (v *ExternalType) GlobalRef() string {
-	return "github.com/arkannsk/nooa/examples/models/07_rewrite.ExternalType"
 }
 
 func (v *CommonMetadata) OaSchema() *oa.Schema {
@@ -131,4 +101,181 @@ func (v *CommonMetadata) OaSchema() *oa.Schema {
 
 func (v *CommonMetadata) GlobalRef() string {
 	return "github.com/arkannsk/nooa/examples/models/07_rewrite.CommonMetadata"
+}
+
+func (v *CreateLocationRequest) OaSchema() *oa.Schema {
+	schema := &oa.Schema{
+		Type:       "object",
+		Properties: make(map[string]*oa.Schema, 2),
+		Required:   make([]string, 0, 2),
+		Ref:        v.GlobalRef(),
+	}
+	{
+		prop := &oa.Schema{}
+		prop.Ref = "#/components/schemas/FeatureDocs"
+
+		schema.Properties["feature"] = prop
+	}
+	{
+		prop := &oa.Schema{}
+
+		prop.Type = "string"
+
+		prop.Description = "User ID"
+
+		schema.Properties["userid"] = prop
+	}
+
+	return schema
+}
+
+func (v *CreateLocationRequest) GlobalRef() string {
+	return "github.com/arkannsk/nooa/examples/models/07_rewrite.CreateLocationRequest"
+}
+
+func (v *FeatureDocs) OaSchema() *oa.Schema {
+	schema := &oa.Schema{
+		Type:       "object",
+		Properties: make(map[string]*oa.Schema, 4),
+		Required:   make([]string, 0, 4),
+		Ref:        v.GlobalRef(),
+	}
+	{
+		prop := &oa.Schema{}
+
+		prop.Type = "string"
+
+		prop.Description = "Must be 'Feature'"
+
+		schema.Properties["type"] = prop
+	}
+	{
+		prop := &oa.Schema{}
+		prop.Ref = "#/components/schemas/GeometryDocs"
+
+		prop.Description = "GeoJSON geometry"
+
+		schema.Properties["geometry"] = prop
+	}
+	{
+		prop := &oa.Schema{}
+		prop.Type = "object"
+
+		prop.Description = "Feature properties (arbitrary JSON object)"
+
+		schema.Properties["properties"] = prop
+	}
+	{
+		prop := &oa.Schema{}
+
+		prop.Type = "array"
+		prop.Items = &oa.Schema{}
+
+		prop.Items.Type = "number"
+
+		prop.Description = "Feature bounding box"
+
+		schema.Properties["bbox"] = prop
+	}
+
+	return schema
+}
+
+func (v *FeatureDocs) GlobalRef() string {
+	return "github.com/arkannsk/nooa/examples/models/07_rewrite.FeatureDocs"
+}
+
+func (v *GeometryDocs) OaSchema() *oa.Schema {
+	schema := &oa.Schema{
+		Type:       "object",
+		Properties: make(map[string]*oa.Schema, 2),
+		Required:   make([]string, 0, 2),
+		Ref:        v.GlobalRef(),
+	}
+	{
+		prop := &oa.Schema{}
+
+		prop.Type = "string"
+
+		prop.Description = "Geometry type"
+
+		schema.Properties["type"] = prop
+	}
+	{
+		prop := &oa.Schema{}
+		prop.Type = "object"
+
+		prop.Description = "Geometry coordinates"
+
+		schema.Properties["coordinates"] = prop
+	}
+
+	return schema
+}
+
+func (v *GeometryDocs) GlobalRef() string {
+	return "github.com/arkannsk/nooa/examples/models/07_rewrite.GeometryDocs"
+}
+
+func (v *CreateLocationWithPoint) OaSchema() *oa.Schema {
+	schema := &oa.Schema{
+		Type:       "object",
+		Properties: make(map[string]*oa.Schema, 2),
+		Required:   make([]string, 0, 2),
+		Ref:        v.GlobalRef(),
+	}
+	{
+		prop := &oa.Schema{}
+		prop.Ref = "#/components/schemas/PointDocs"
+
+		schema.Properties["location"] = prop
+	}
+	{
+		prop := &oa.Schema{}
+
+		prop.Type = "string"
+
+		prop.Description = "Name of the location"
+
+		schema.Properties["name"] = prop
+	}
+
+	return schema
+}
+
+func (v *CreateLocationWithPoint) GlobalRef() string {
+	return "github.com/arkannsk/nooa/examples/models/07_rewrite.CreateLocationWithPoint"
+}
+
+func (v *PointDocs) OaSchema() *oa.Schema {
+	schema := &oa.Schema{
+		Type:       "object",
+		Properties: make(map[string]*oa.Schema, 2),
+		Required:   make([]string, 0, 2),
+		Ref:        v.GlobalRef(),
+	}
+	{
+		prop := &oa.Schema{}
+
+		prop.Type = "number"
+
+		prop.Description = "Longitude"
+
+		schema.Properties["longitude"] = prop
+	}
+	{
+		prop := &oa.Schema{}
+
+		prop.Type = "number"
+
+		prop.Description = "Latitude"
+
+		schema.Properties["latitude"] = prop
+	}
+
+	return schema
+}
+
+func (v *PointDocs) GlobalRef() string {
+	return "github.com/arkannsk/nooa/examples/models/07_rewrite.PointDocs"
 }

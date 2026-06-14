@@ -289,14 +289,58 @@ func buildSpecFromData(info Info, routes []RouteSpec, schemas map[string]*oa.Sch
 		}
 
 		params := []map[string]any{}
-		for _, m := range pathParamRegex.FindAllStringSubmatch(r.Path, -1) {
-			params = append(params, map[string]any{
-				"name":        m[1],
-				"in":          "path",
-				"required":    true,
-				"description": "Path parameter",
-				"schema":      map[string]any{"type": "string"},
-			})
+
+		// Если есть параметры из OaParams() — используем их
+		if len(r.Parameters) > 0 {
+			seen := make(map[string]bool)
+			for _, p := range r.Parameters {
+				key := p.Name + "/" + string(p.In)
+				if seen[key] {
+					continue
+				}
+				seen[key] = true
+
+				paramMap := map[string]any{
+					"name": p.Name,
+					"in":   string(p.In),
+				}
+				if p.Description != "" {
+					paramMap["description"] = p.Description
+				}
+				if p.Required {
+					paramMap["required"] = true
+				}
+				if p.Schema != nil {
+					paramMap["schema"] = normalizeSchema(p.Schema, refRemap)
+				}
+				if p.Example != nil {
+					paramMap["example"] = p.Example
+				}
+				if p.Deprecated {
+					paramMap["deprecated"] = true
+				}
+				if p.AllowEmptyValue {
+					paramMap["allowEmptyValue"] = true
+				}
+				if p.Style != "" {
+					paramMap["style"] = p.Style
+				}
+				if p.Explode != nil {
+					paramMap["explode"] = *p.Explode
+				}
+				params = append(params, paramMap)
+			}
+		} else {
+			// Fallback: извлекаем path параметры из route pattern
+			for _, m := range pathParamRegex.FindAllStringSubmatch(r.Path, -1) {
+				params = append(params, map[string]any{
+					"name":        m[1],
+					"in":          "path",
+					"required":    true,
+					"description": "Path parameter",
+					"schema":      map[string]any{"type": "string"},
+				})
+			}
 		}
 		if len(params) > 0 {
 			op["parameters"] = params

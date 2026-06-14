@@ -5,6 +5,8 @@ import (
 	"path"
 	"reflect"
 	"strings"
+
+	oa "github.com/arkannsk/elval/pkg/openapi"
 )
 
 const (
@@ -46,8 +48,9 @@ type RouteSpec struct {
 	Handler               http.HandlerFunc
 	Extensions            map[string]any
 	RequestBodySchemaName string
-	ResponseSchemaNames   map[int]string // [Status Code] -> Schema Name
-	ErrorStatuses         []int          // статусы, для которых подтягиваются глобальные схемы ошибок из Spec
+	ResponseSchemaNames   map[int]string  // [Status Code] -> Schema Name
+	ErrorStatuses         []int           // статусы, для которых подтягиваются глобальные схемы ошибок из Spec
+	Parameters            []*oa.Parameter // OpenAPI параметры из OaParams() моделей
 }
 
 type RouteBuilder[Req, Res any] struct {
@@ -67,6 +70,7 @@ type RouteBuilder[Req, Res any] struct {
 	requestBodySchemaName string
 	responseSchemaNames   map[int]string
 	errorStatuses         []int
+	parameters            []*oa.Parameter
 }
 
 func NewRoute[Req, Res any](method, path string, handler http.HandlerFunc) *RouteBuilder[Req, Res] {
@@ -80,8 +84,15 @@ func NewRoute[Req, Res any](method, path string, handler http.HandlerFunc) *Rout
 	reqSchemaName := getSchemaName[Req]()
 	resSchemaName := getSchemaName[Res]()
 
-	RegisterModel(reqSchemaName, new(Req))
-	RegisterModel(resSchemaName, new(Res))
+	reqInstance := new(Req)
+	resInstance := new(Res)
+
+	RegisterModel(reqSchemaName, reqInstance)
+	RegisterModel(resSchemaName, resInstance)
+
+	// Собираем параметры из OaParams() если модели поддерживают
+	collectParams(reqInstance, &b.parameters)
+	collectParams(resInstance, &b.parameters)
 
 	if method != "GET" && method != "HEAD" && method != "DELETE" {
 		b.RequestBodySchema(reqSchemaName)
@@ -118,6 +129,28 @@ func defaultOperationID(method, path string) string {
 	return sb.String()
 }
 
+// collectParams извлекает параметры из инстанса если он реализует paramsProvider.
+// Параметры добавляются к destination, дубликаты по (name, in) пропускаются.
+func collectParams(instance any, destination *[]*oa.Parameter) {
+	pp, ok := any(instance).(paramsProvider)
+	if !ok {
+		return
+	}
+
+	// Строим set существующих параметров для дедупликации
+	existing := make(map[string]bool)
+	for _, p := range *destination {
+		existing[p.Name+"/"+string(p.In)] = true
+	}
+
+	for _, p := range pp.OaParams() {
+		if !existing[p.Name+"/"+string(p.In)] {
+			*destination = append(*destination, p)
+			existing[p.Name+"/"+string(p.In)] = true
+		}
+	}
+}
+
 func (b *RouteBuilder[Req, Res]) syncSpec() {
 	if b.spec == nil {
 		b.spec = &RouteSpec{}
@@ -137,6 +170,7 @@ func (b *RouteBuilder[Req, Res]) syncSpec() {
 	b.spec.ErrorStatuses = append([]int(nil), b.errorStatuses...)
 	b.spec.Handler = b.handler
 	b.spec.RequestBodySchemaName = b.requestBodySchemaName
+	b.spec.Parameters = append([]*oa.Parameter(nil), b.parameters...)
 
 	// Копирование расширений (исправлено)
 	if len(b.extensions) > 0 {
