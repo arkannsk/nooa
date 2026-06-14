@@ -136,10 +136,10 @@ func main() {
 	nooa.RegisterVersionedAPI("", spec, mux)
 	nooa.RegisterScalar("", spec, mux)
 
-	log.Println("Server starting on http://localhost:9097")
-	log.Println("Swagger UI: http://localhost:9097/docs/")
-	log.Println("Raw JSON:   http://localhost:9097/openapi.json")
-	log.Println("Scalar UI:  http://localhost:9097/scalar/")
+	log.Println("Server starting on http://localhost:9090")
+	log.Println("Swagger UI: http://localhost:9090/docs/")
+	log.Println("Raw JSON:   http://localhost:9090/openapi.json")
+	log.Println("Scalar UI:  http://localhost:9090/scalar/")
 	log.Fatal(http.ListenAndServe(":9090", mux))
 }
 

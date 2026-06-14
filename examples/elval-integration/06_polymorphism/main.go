@@ -95,10 +95,10 @@ func main() {
 	nooa.RegisterRedoc("", spec, mux)
 	nooa.RegisterScalar("", spec, mux)
 
-	log.Println("Server starting on http://localhost:9095")
-	log.Println("Swagger UI: http://localhost:9095/docs/")
-	log.Println("Redoc UI:   http://localhost:9095/redoc/")
-	log.Println("Scalar UI:  http://localhost:9095/scalar/")
-	log.Println("Raw JSON:   http://localhost:9095/openapi.json")
+	log.Println("Server starting on http://localhost:9090")
+	log.Println("Swagger UI: http://localhost:9090/docs/")
+	log.Println("Redoc UI:   http://localhost:9090/redoc/")
+	log.Println("Scalar UI:  http://localhost:9090/scalar/")
+	log.Println("Raw JSON:   http://localhost:9090/openapi.json")
 	log.Fatal(http.ListenAndServe(":9090", mux))
 }

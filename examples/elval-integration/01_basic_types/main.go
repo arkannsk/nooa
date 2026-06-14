@@ -99,9 +99,9 @@ func main() {
 	// Монтируем документацию
 	nooa.RegisterVersionedAPI("", spec, mux)
 
-	log.Println("Server starting on http://localhost:8080")
-	log.Println("Swagger UI: http://localhost:8080/docs/")
-	log.Println("Raw JSON:   http://localhost:8080/openapi.json")
+	log.Println("Server starting on http://localhost:9090")
+	log.Println("Swagger UI: http://localhost:9090/docs/")
+	log.Println("Raw JSON:   http://localhost:9090/openapi.json")
 
 	log.Fatal(http.ListenAndServe(":9090", mux))
 }
