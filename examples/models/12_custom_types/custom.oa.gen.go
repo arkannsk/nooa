@@ -127,7 +127,7 @@ func (v *WithEmbed) OaSchema() *oa.Schema {
 	}
 	{
 		prop := &oa.Schema{}
-		prop.Ref = "#/components/schemas/EmbedStruct"
+		prop.Ref = "#/components/schemas/github.com/arkannsk/nooa/examples/models/12_custom_types.EmbedStruct"
 
 		schema.Properties["embedstruct"] = prop
 	}

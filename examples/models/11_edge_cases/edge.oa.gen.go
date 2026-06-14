@@ -45,7 +45,7 @@ func (v *PointerChain) OaSchema() *oa.Schema {
 	}
 	{
 		prop := &oa.Schema{}
-		prop.Ref = "#/components/schemas/*Nested"
+		prop.Ref = "#/components/schemas/github.com/arkannsk/nooa/examples/models/11_edge_cases.Nested"
 
 		prop.Description = "Pointer to struct"
 
@@ -90,7 +90,7 @@ func (v *CircularRefA) OaSchema() *oa.Schema {
 	}
 	{
 		prop := &oa.Schema{}
-		prop.Ref = "#/components/schemas/*CircularRefB"
+		prop.Ref = "#/components/schemas/github.com/arkannsk/nooa/examples/models/11_edge_cases.CircularRefB"
 
 		prop.Description = "Reference to B"
 
@@ -113,7 +113,7 @@ func (v *CircularRefB) OaSchema() *oa.Schema {
 	}
 	{
 		prop := &oa.Schema{}
-		prop.Ref = "#/components/schemas/*CircularRefA"
+		prop.Ref = "#/components/schemas/github.com/arkannsk/nooa/examples/models/11_edge_cases.CircularRefA"
 
 		prop.Description = "Reference to A"
 
@@ -169,7 +169,7 @@ func (v *WithUntypedNil) OaSchema() *oa.Schema {
 	}
 	{
 		prop := &oa.Schema{}
-		prop.Ref = "#/components/schemas/*Nested"
+		prop.Ref = "#/components/schemas/github.com/arkannsk/nooa/examples/models/11_edge_cases.Nested"
 
 		prop.Description = "Nullable struct"
 

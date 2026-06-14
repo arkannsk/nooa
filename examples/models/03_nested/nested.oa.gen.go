@@ -30,6 +30,7 @@ func (v *Address) OaSchema() *oa.Schema {
 		prop.Type = "string"
 
 		prop.Description = "City name"
+		prop.Example = "New York"
 
 		schema.Properties["city"] = prop
 	}
@@ -74,6 +75,7 @@ func (v *UserWithAddress) OaSchema() *oa.Schema {
 		prop.Type = "string"
 
 		prop.Description = "User ID"
+		prop.Example = "user_001"
 
 		schema.Properties["id"] = prop
 	}
@@ -83,22 +85,25 @@ func (v *UserWithAddress) OaSchema() *oa.Schema {
 		prop.Type = "string"
 
 		prop.Description = "User name"
+		prop.Example = "John Doe"
 
 		schema.Properties["name"] = prop
 	}
 	{
 		prop := &oa.Schema{}
-		prop.Ref = "#/components/schemas/Address"
+		prop.Ref = "#/components/schemas/github.com/arkannsk/nooa/examples/models/03_nested.Address"
 
 		prop.Description = "Billing address"
+		prop.Example = "{\"street\": \"123 Main St\", \"city\": \"New York\", \"zipCode\": \"12345\", \"country\": \"US\"}"
 
 		schema.Properties["billing"] = prop
 	}
 	{
 		prop := &oa.Schema{}
-		prop.Ref = "#/components/schemas/*Address"
+		prop.Ref = "#/components/schemas/github.com/arkannsk/nooa/examples/models/03_nested.Address"
 
 		prop.Description = "Shipping address (optional)"
+		prop.Example = "{\"street\": \"456 Side St\", \"city\": \"Los Angeles\", \"zipCode\": \"90001\", \"country\": \"US\"}"
 
 		schema.Properties["shipping"] = prop
 	}
@@ -123,6 +128,7 @@ func (v *RecursiveNode) OaSchema() *oa.Schema {
 		prop.Type = "string"
 
 		prop.Description = "Node value"
+		prop.Example = "root"
 
 		schema.Properties["value"] = prop
 	}
@@ -131,17 +137,19 @@ func (v *RecursiveNode) OaSchema() *oa.Schema {
 
 		prop.Type = "array"
 		prop.Items = &oa.Schema{}
-		prop.Items.Ref = "#/components/schemas//.RecursiveNode"
+		prop.Items.Ref = "#/components/schemas/github.com/arkannsk/nooa/examples/models/03_nested.RecursiveNode"
 
 		prop.Description = "Child nodes"
+		prop.Example = "[{\"value\": \"child1\"}]"
 
 		schema.Properties["children"] = prop
 	}
 	{
 		prop := &oa.Schema{}
-		prop.Ref = "#/components/schemas/*RecursiveNode"
+		prop.Ref = "#/components/schemas/github.com/arkannsk/nooa/examples/models/03_nested.RecursiveNode"
 
 		prop.Description = "Parent reference (nullable)"
+		prop.Example = "null"
 
 		schema.Properties["parent"] = prop
 	}

@@ -8,6 +8,7 @@ type Address struct {
 	Street string
 
 	// @oa:description "City name"
+	// @oa:example "New York"
 	City string
 
 	// @oa:description "Postal code"
@@ -23,15 +24,19 @@ type Address struct {
 // @oa:description "User with nested address"
 type UserWithAddress struct {
 	// @oa:description "User ID"
+	// @oa:example "user_001"
 	ID string
 
 	// @oa:description "User name"
+	// @oa:example "John Doe"
 	Name string
 
 	// @oa:description "Billing address"
+	// @oa:example {"street": "123 Main St", "city": "New York", "zipCode": "12345", "country": "US"}
 	Billing Address
 
 	// @oa:description "Shipping address (optional)"
+	// @oa:example {"street": "456 Side St", "city": "Los Angeles", "zipCode": "90001", "country": "US"}
 	Shipping *Address
 }
 
@@ -39,12 +44,15 @@ type UserWithAddress struct {
 // @oa:description "Tree node with self-reference"
 type RecursiveNode struct {
 	// @oa:description "Node value"
+	// @oa:example "root"
 	Value string
 
 	// @oa:description "Child nodes"
+	// @oa:example [{"value": "child1"}]
 	Children []RecursiveNode
 
 	// @oa:description "Parent reference (nullable)"
+	// @oa:example null
 	Parent *RecursiveNode
 }
 
@@ -57,6 +65,7 @@ type DeepNesting struct {
 				Level4 struct {
 					Level5 struct {
 						// @oa:description "Deep value"
+						// @oa:example "deep_val"
 						Value string
 					} `json:"level5"`
 				} `json:"level4"`

@@ -117,7 +117,7 @@ func (v *Container) OaSchema() *oa.Schema {
 	}
 	{
 		prop := &oa.Schema{}
-		prop.Ref = "#/components/schemas/Shape"
+		prop.Ref = "#/components/schemas/github.com/arkannsk/nooa/examples/models/06_polymorphism.Shape"
 
 		prop.Description = "Shape variant"
 

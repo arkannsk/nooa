@@ -1,142 +1,167 @@
 package nooa
 
 import (
-	"encoding/json"
-	"log"
 	"reflect"
 	"strings"
 
 	oa "github.com/arkannsk/elval/pkg/openapi"
 )
 
-// Глобальная мапа для обратной совместимости со старым API (SpecMiddleware)
-var modelSchemas = make(map[string]*oa.Schema)
+// globalSchemas — глобальный реестр схем для обратной совместимости.
+var globalSchemas = make(map[string]*oa.Schema)
 
-// registerModelInternal — универсальная логика регистрации схемы в переданную мапу.
+// schemaProvider — интерфейс, реализуемый типами сгенерированными elval-gen.
+type schemaProvider interface {
+	OaSchema() *oa.Schema
+	GlobalRef() string
+}
+
+// RegisterModel регистрирует модель в глобальном реестре схем.
+// Эта функция используется в NewRoute для автоматической регистрации request/response моделей.
+func RegisterModel(name string, instance any) {
+	registerModelInternal(globalSchemas, name, instance)
+}
+
+// registerModelInternal регистрирует модель в указанной карте схем.
+// Если instance реализует schemaProvider, вызывается OaSchema() и результат сохраняется.
+// Затем рекурсивно регистрируются вложенные типы из полей структуры.
 func registerModelInternal(schemas map[string]*oa.Schema, name string, instance any) {
-	t := reflect.TypeOf(instance)
-	if t.Kind() == reflect.Pointer {
-		t = t.Elem()
+	// Проверяем, реализует ли instance интерфейс schemaProvider
+	sp, ok := any(instance).(schemaProvider)
+	if !ok {
+		return
 	}
 
-	val := reflect.ValueOf(instance)
-	if val.Kind() == reflect.Pointer {
-		val = val.Elem()
+	schema := sp.OaSchema()
+	if schema == nil {
+		return
 	}
 
-	var method reflect.Value
-	if m := val.MethodByName("OaSchema"); m.IsValid() {
-		method = m
-	} else if val.CanAddr() {
-		if m := val.Addr().MethodByName("OaSchema"); m.IsValid() {
-			method = m
-		}
-	} else {
-		ptr := reflect.New(val.Type())
-		ptr.Elem().Set(val)
-		if m := ptr.MethodByName("OaSchema"); m.IsValid() {
-			method = m
-		}
-	}
-
-	var schema *oa.Schema
-
-	if !method.IsValid() {
-		log.Printf("⚠️ OaSchema not found on %T, falling back to reflection", instance)
-		schema = schemaFromType(t)
-		if schema == nil {
-			return
-		}
-	} else {
-		results := method.Call(nil)
-		if len(results) == 0 || results[0].IsNil() {
-			log.Printf("❌ OaSchema returned nil for %T", instance)
-			return
-		}
-
-		if s, ok := results[0].Interface().(*oa.Schema); ok {
-			schema = s
-		} else {
-			data, _ := json.Marshal(results[0].Interface())
-			schema = &oa.Schema{}
-			json.Unmarshal(data, schema)
-		}
-	}
-
-	// Если схема с таким именем уже зарегистрирована — пропускаем.
-	// Это предотвращает дубликаты при повторной регистрации (например, когда
-	// RegisterSpecAndMux и RegisterSpec вызываются для одного роута).
+	// Если схема уже зарегистрирована — пропускаем
 	if _, exists := schemas[name]; exists {
 		return
 	}
 
-	schema.Ref = "" // Очищаем $ref для компонентов
-	schemas[name] = schema
-}
-
-// schemaFromType генерирует базовую OpenAPI-схему через рефлексию.
-// Используется как fallback, когда у модели нет метода OaSchema().
-func schemaFromType(t reflect.Type) *oa.Schema {
-	if t.Kind() == reflect.Ptr {
-		return schemaFromType(t.Elem())
+	if !registerSchema(schemas, name, schema) {
+		return
 	}
 
-	switch t.Kind() {
-	case reflect.String:
-		return &oa.Schema{Type: "string"}
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return &oa.Schema{Type: "integer"}
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return &oa.Schema{Type: "integer"}
-	case reflect.Float32, reflect.Float64:
-		return &oa.Schema{Type: "number"}
-	case reflect.Bool:
-		return &oa.Schema{Type: "boolean"}
-	case reflect.Slice, reflect.Array:
-		return &oa.Schema{
-			Type:  "array",
-			Items: schemaFromType(t.Elem()),
+	// Рекурсивно регистрируем вложенные типы
+	registerNestedTypes(schemas, reflect.TypeOf(instance), name)
+}
+
+// registerNestedTypes рекурсивно находит и регистрирует вложенные типы из полей структуры.
+func registerNestedTypes(schemas map[string]*oa.Schema, typ reflect.Type, parentName string) {
+	if typ.Kind() == reflect.Ptr {
+		typ = typ.Elem()
+	}
+
+	if typ.Kind() != reflect.Struct {
+		return
+	}
+
+	for i := 0; i < typ.NumField(); i++ {
+		f := typ.Field(i)
+		ft := f.Type
+
+		// Пропускаем вложенные (неэкспортированные) поля
+		if !f.IsExported() {
+			continue
 		}
-	case reflect.Map:
-		// oa.Schema не поддерживает AdditionalProperties, возвращаем object
-		return &oa.Schema{Type: "object"}
+
+		walkType(schemas, ft, parentName)
+	}
+}
+
+// walkType обходит тип поля и регистрирует вложенные структуры.
+func walkType(schemas map[string]*oa.Schema, typ reflect.Type, parentName string) {
+	if typ.Kind() == reflect.Ptr {
+		typ = typ.Elem()
+	}
+
+	switch typ.Kind() {
 	case reflect.Struct:
-		schema := &oa.Schema{
-			Type:       "object",
-			Properties: make(map[string]*oa.Schema),
+		// Проверяет, реализует ли этот тип schemaProvider
+		var zeroVal any = reflect.New(typ).Interface()
+		if sp, ok := zeroVal.(schemaProvider); ok {
+			ref := sp.GlobalRef()
+			shortName := extractShortName(ref)
+			schema := sp.OaSchema()
+			if registerSchema(schemas, shortName, schema) {
+				registerNestedTypes(schemas, typ, shortName)
+			}
 		}
-		for i := 0; i < t.NumField(); i++ {
-			field := t.Field(i)
-			if !field.IsExported() {
-				continue
-			}
 
-			jsonTag := field.Tag.Get("json")
-			if jsonTag == "" {
-				jsonTag = field.Name
-			} else {
-				jsonTag = strings.Split(jsonTag, ",")[0]
-			}
-			if jsonTag == "-" {
-				continue
-			}
+	case reflect.Slice, reflect.Array:
+		elem := typ.Elem()
+		// Сначала рекурсивно обходим элемент
+		walkType(schemas, elem, parentName)
 
-			schema.Properties[jsonTag] = schemaFromType(field.Type)
+		// Затем регистрируем элемент, если он struct с OaSchema
+		unwrapped := elem
+		if unwrapped.Kind() == reflect.Ptr {
+			unwrapped = unwrapped.Elem()
 		}
-		return schema
-	default:
-		log.Printf("⚠️ Unsupported type %v for schema generation", t.Kind())
-		return nil
+		if unwrapped.Kind() == reflect.Struct {
+			zeroVal := reflect.New(unwrapped).Interface()
+			if sp, ok := zeroVal.(schemaProvider); ok {
+				ref := sp.GlobalRef()
+				shortName := extractShortName(ref)
+				schema := sp.OaSchema()
+				if registerSchema(schemas, shortName, schema) {
+					registerNestedTypes(schemas, unwrapped, shortName)
+				}
+			}
+		}
+
+	case reflect.Map:
+		val := typ.Elem()
+		// Рекурсивно обходим значение
+		walkType(schemas, val, parentName)
+
+		// Регистрируем значение, если оно struct с OaSchema
+		unwrapped := val
+		if unwrapped.Kind() == reflect.Ptr {
+			unwrapped = unwrapped.Elem()
+		}
+		if unwrapped.Kind() == reflect.Struct {
+			zeroVal := reflect.New(unwrapped).Interface()
+			if sp, ok := zeroVal.(schemaProvider); ok {
+				ref := sp.GlobalRef()
+				shortName := extractShortName(ref)
+				schema := sp.OaSchema()
+				if registerSchema(schemas, shortName, schema) {
+					registerNestedTypes(schemas, unwrapped, shortName)
+				}
+			}
+		}
 	}
 }
 
-// RegisterModel (глобальная функция) для обратной совместимости
-func RegisterModel(name string, instance any) {
-	registerModelInternal(modelSchemas, name, instance)
+// registerSchema регистрирует схему, очищая Ref, если она ещё не зарегистрирована.
+// Возвращает true если регистрация произошла, false если схема уже существовала.
+func registerSchema(schemas map[string]*oa.Schema, name string, schema *oa.Schema) bool {
+	if _, exists := schemas[name]; exists {
+		return false
+	}
+	schema.Ref = ""
+	schemas[name] = schema
+	return true
 }
 
-func sanitizeGlobalRefForOpenAPI(ref string) string {
-	s := strings.ReplaceAll(ref, "/", ".")
-	s = strings.TrimLeft(s, ".")
-	return s
+// extractShortName извлекает короткое имя из полного $ref.
+// github.com/arkannsk/nooa/examples/models/03_nested.Address -> 03_nested.Address
+func extractShortName(ref string) string {
+	// Убираем префикс $ref
+	pathPart := strings.TrimPrefix(ref, "#/components/schemas/")
+
+	// Заменяем / на .
+	dotted := strings.ReplaceAll(pathPart, "/", ".")
+
+	// Берём последние два сегмента (пакет.Тип)
+	parts := strings.Split(dotted, ".")
+	if len(parts) >= 2 {
+		return parts[len(parts)-2] + "." + parts[len(parts)-1]
+	}
+	return pathPart
 }

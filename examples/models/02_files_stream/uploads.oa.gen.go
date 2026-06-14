@@ -20,6 +20,7 @@ func (v *StandardFileTypes) OaSchema() *oa.Schema {
 		prop.Format = "binary"
 
 		prop.Description = "Avatar as *os.File"
+		prop.Example = "avatar.png"
 
 		schema.Properties["avatar"] = prop
 	}
@@ -29,6 +30,7 @@ func (v *StandardFileTypes) OaSchema() *oa.Schema {
 		prop.Format = "binary"
 
 		prop.Description = "Payload as io.Reader"
+		prop.Example = "payload-content"
 
 		schema.Properties["payload"] = prop
 	}
@@ -38,6 +40,7 @@ func (v *StandardFileTypes) OaSchema() *oa.Schema {
 		prop.Format = "binary"
 
 		prop.Description = "Thumbnail as io.ReadCloser"
+		prop.Example = "thumb.png"
 
 		schema.Properties["thumbnail"] = prop
 	}
@@ -47,6 +50,7 @@ func (v *StandardFileTypes) OaSchema() *oa.Schema {
 		prop.Format = "byte"
 
 		prop.Description = "Data as base64 []byte"
+		prop.Example = "SGVsbG8gV29ybGQ="
 
 		schema.Properties["data"] = prop
 	}
@@ -56,6 +60,7 @@ func (v *StandardFileTypes) OaSchema() *oa.Schema {
 		prop.Format = "binary"
 
 		prop.Description = "Multipart file"
+		prop.Example = "attachment.zip"
 
 		schema.Properties["attachment"] = prop
 	}
@@ -80,6 +85,7 @@ func (v *CustomWithAnnotations) OaSchema() *oa.Schema {
 		prop.Format = "binary"
 
 		prop.Description = "Custom file reader"
+		prop.Example = "custom-avatar.png"
 
 		schema.Properties["avatar"] = prop
 	}
@@ -89,15 +95,17 @@ func (v *CustomWithAnnotations) OaSchema() *oa.Schema {
 		prop.Format = "binary"
 
 		prop.Description = "Raw stream from custom type"
+		prop.Example = "custom-stream-data"
 
 		schema.Properties["payload"] = prop
 	}
 	{
 		prop := &oa.Schema{}
-		prop.Ref = "#/components/schemas/*CustomBuffer"
-
-		prop.Description = "Base64 data from custom type"
+		prop.Type = "string"
 		prop.Format = "byte"
+
+		prop.Description = "Data as byte array"
+		prop.Example = "SGVsbG8gV29ybGQ="
 
 		schema.Properties["data"] = prop
 	}
@@ -122,6 +130,7 @@ func (v *MixedRequest) OaSchema() *oa.Schema {
 		prop.Format = "binary"
 
 		prop.Description = "Main file"
+		prop.Example = "main-file.txt"
 
 		schema.Properties["file"] = prop
 	}
@@ -131,13 +140,17 @@ func (v *MixedRequest) OaSchema() *oa.Schema {
 		prop.Type = "string"
 
 		prop.Description = "User ID from form"
+		prop.Example = "user_123"
 
 		schema.Properties["userid"] = prop
 	}
 	{
 		prop := &oa.Schema{}
 
+		prop.Type = "string"
+
 		prop.Description = "Optional description"
+		prop.Example = "A nice description"
 
 		schema.Properties["description"] = prop
 	}
@@ -150,6 +163,7 @@ func (v *MixedRequest) OaSchema() *oa.Schema {
 		prop.Items.Type = "string"
 
 		prop.Description = "Tags as comma-separated"
+		prop.Example = "[\"tag1\", \"tag2\"]"
 
 		schema.Properties["tags"] = prop
 	}
@@ -165,6 +179,7 @@ func (v *MixedRequest) OaSchema() *oa.Schema {
 		prop.Minimum = oa.Ptr[float64](1)
 
 		prop.Description = "At least one category"
+		prop.Example = "[\"category1\", \"category2\"]"
 
 		schema.Properties["categories"] = prop
 	}
@@ -208,9 +223,23 @@ func (v *CustomReader) GlobalRef() string {
 func (v *CustomStream) OaSchema() *oa.Schema {
 	schema := &oa.Schema{
 		Type:       "object",
-		Properties: make(map[string]*oa.Schema, 0),
-		Required:   make([]string, 0, 0),
+		Properties: make(map[string]*oa.Schema, 2),
+		Required:   make([]string, 0, 2),
 		Ref:        v.GlobalRef(),
+	}
+	{
+		prop := &oa.Schema{}
+		prop.Type = "string"
+		prop.Format = "byte"
+
+		schema.Properties["data"] = prop
+	}
+	{
+		prop := &oa.Schema{}
+
+		prop.Type = "integer"
+
+		schema.Properties["pos"] = prop
 	}
 
 	return schema
@@ -223,9 +252,16 @@ func (v *CustomStream) GlobalRef() string {
 func (v *CustomBuffer) OaSchema() *oa.Schema {
 	schema := &oa.Schema{
 		Type:       "object",
-		Properties: make(map[string]*oa.Schema, 0),
-		Required:   make([]string, 0, 0),
+		Properties: make(map[string]*oa.Schema, 1),
+		Required:   make([]string, 0, 1),
 		Ref:        v.GlobalRef(),
+	}
+	{
+		prop := &oa.Schema{}
+		prop.Type = "string"
+		prop.Format = "byte"
+
+		schema.Properties["data"] = prop
 	}
 
 	return schema

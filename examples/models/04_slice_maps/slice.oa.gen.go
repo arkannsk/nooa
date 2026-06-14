@@ -44,7 +44,7 @@ func (v *SliceVariations) OaSchema() *oa.Schema {
 
 		prop.Type = "array"
 		prop.Items = &oa.Schema{}
-		prop.Items.Ref = "#/components/schemas//.Item"
+		prop.Items.Ref = "#/components/schemas/github.com/arkannsk/nooa/examples/models/04_slice_maps.Item"
 
 		prop.Description = "Slice of nested structs"
 
@@ -62,7 +62,7 @@ func (v *SliceVariations) OaSchema() *oa.Schema {
 
 		prop.Type = "array"
 		prop.Items = &oa.Schema{}
-		prop.Items.Ref = "#/components/schemas//.*Item"
+		prop.Items.Ref = "#/components/schemas/github.com/arkannsk/nooa/examples/models/04_slice_maps.Item"
 
 		prop.Description = "Slice of pointers to structs"
 
