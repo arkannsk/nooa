@@ -1,4 +1,4 @@
-.PHONY: test gen install swagger-ui
+.PHONY: test gen install swagger-ui vacuum
 
 SWAGGER_VERSION := v5.17.14
 SWAGGER_URL := https://github.com/swagger-api/swagger-ui/archive/refs/tags/$(SWAGGER_VERSION).tar.gz
@@ -27,6 +27,11 @@ test:
 clean:
 	@find ./ -name "*.gen.go" -delete
 	@find ./ -name "*.debug.go" -delete
+
+# Vacuum-валидация OpenAPI спецификаций для примеров elval-integration.
+# Поднимает каждый сервер по очереди, скачивает openapi.json, проверяет vacuum, убивает сервер.
+vacuum: gen-spec
+	@bash scripts/vacuum-check.sh
 
 swagger-ui:
 	@echo "Downloading Swagger UI $(SWAGGER_VERSION)..."

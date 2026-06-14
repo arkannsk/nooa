@@ -140,7 +140,7 @@ func main() {
 	log.Println("Swagger UI: http://localhost:9097/docs/")
 	log.Println("Raw JSON:   http://localhost:9097/openapi.json")
 	log.Println("Scalar UI:  http://localhost:9097/scalar/")
-	log.Fatal(http.ListenAndServe(":9097", mux))
+	log.Fatal(http.ListenAndServe(":9090", mux))
 }
 
 const CTJSON = "application/json"

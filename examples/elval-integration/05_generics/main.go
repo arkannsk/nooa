@@ -62,5 +62,5 @@ func main() {
 	log.Println("Server starting on http://localhost:9094")
 	log.Println("Swagger UI: http://localhost:9094/docs/")
 	log.Println("Raw JSON:   http://localhost:9094/openapi.json")
-	log.Fatal(http.ListenAndServe(":9094", mux))
+	log.Fatal(http.ListenAndServe(":9090", mux))
 }

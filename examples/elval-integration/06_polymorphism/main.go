@@ -100,5 +100,5 @@ func main() {
 	log.Println("Redoc UI:   http://localhost:9095/redoc/")
 	log.Println("Scalar UI:  http://localhost:9095/scalar/")
 	log.Println("Raw JSON:   http://localhost:9095/openapi.json")
-	log.Fatal(http.ListenAndServe(":9095", mux))
+	log.Fatal(http.ListenAndServe(":9090", mux))
 }
