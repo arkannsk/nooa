@@ -20,6 +20,33 @@ type Info struct {
 // SpecTransformer — функция для модификации спецификации перед отдачей.
 type SpecTransformer func(spec map[string]any) map[string]any
 
+// buildSpecFromData собирает spec из переданных данных (без глобальных переменных)
+func buildSpecFromData(info Info, routes []RouteSpec, schemas map[string]*oa.Schema, errorSchemas map[int]*errorSchema) map[string]any {
+	refRemap := generateRefRemap(schemas)
+	normalizedSchemas := normalizeAllSchemas(schemas, refRemap)
+	tags := collectTags(routes)
+
+	paths := map[string]any{}
+	pathParamRegex := regexp.MustCompile(`\{([^}]+)}`)
+
+	for _, r := range routes {
+		pathItem := getOrCreatePathItem(paths, r.Path)
+		op := buildOperation(r, refRemap, schemas, errorSchemas, pathParamRegex)
+		pathItem[strings.ToLower(r.Method)] = op
+	}
+
+	return map[string]any{
+		"openapi": "3.0.3",
+		"info":    info,
+		"servers": []map[string]any{{"url": "/", "description": "Current server"}},
+		"paths":   paths,
+		"components": map[string]any{
+			"schemas": normalizedSchemas,
+		},
+		"tags": tags,
+	}
+}
+
 // resolveRef remaps a $ref value through refRemap and returns an isolated object.
 func resolveRef(refVal any, refRemap map[string]string) map[string]any {
 	refStr, ok := refVal.(string)
@@ -214,33 +241,6 @@ func generateRefRemap(schemas map[string]*oa.Schema) map[string]string {
 	}
 
 	return remap
-}
-
-// buildSpecFromData собирает spec из переданных данных (без глобальных переменных)
-func buildSpecFromData(info Info, routes []RouteSpec, schemas map[string]*oa.Schema, errorSchemas map[int]*errorSchema) map[string]any {
-	refRemap := generateRefRemap(schemas)
-	normalizedSchemas := normalizeAllSchemas(schemas, refRemap)
-	tags := collectTags(routes)
-
-	paths := map[string]any{}
-	pathParamRegex := regexp.MustCompile(`\{([^}]+)}`)
-
-	for _, r := range routes {
-		pathItem := getOrCreatePathItem(paths, r.Path)
-		op := buildOperation(r, refRemap, schemas, errorSchemas, pathParamRegex)
-		pathItem[strings.ToLower(r.Method)] = op
-	}
-
-	return map[string]any{
-		"openapi": "3.0.3",
-		"info":    info,
-		"servers": []map[string]any{{"url": "/", "description": "Current server"}},
-		"paths":   paths,
-		"components": map[string]any{
-			"schemas": normalizedSchemas,
-		},
-		"tags": tags,
-	}
 }
 
 func normalizeAllSchemas(schemas map[string]*oa.Schema, refRemap map[string]string) map[string]any {
