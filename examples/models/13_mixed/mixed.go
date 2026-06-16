@@ -7,12 +7,8 @@ import (
 
 // MegaStruct — комбинация ВСЕХ фич
 // @oa:description "Comprehensive example with all features"
-// @oa:discriminator.propertyName "kind"
-// @oa:discriminator.mapping "user:UserVariant"
-// @oa:discriminator.mapping "admin:AdminVariant"
 type MegaStruct struct {
 	// === Примитивы ===
-	// @oa:in path
 	ID string `json:"id"`
 
 	// @oa:description "User name"

@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -15,45 +16,56 @@ var swaggerFS embed.FS
 //go:embed static/redoc/*
 var redocFS embed.FS
 
+//go:embed static/scalar/*
+var scalarFS embed.FS
+
 func SwaggerUIHandler(basePrefix string, specURL string) http.Handler {
+	return embeddedUIHandler(swaggerFS, "static/swagger/", basePrefix, specURL, "index.html", "swagger-initializer.js")
+}
+
+func RedocUIHandler(basePrefix string, specURL string) http.Handler {
+	return embeddedUIHandler(redocFS, "static/redoc/", basePrefix, specURL, "index.html")
+}
+
+func ScalarUIHandler(basePrefix string, specURL string) http.Handler {
+	return embeddedUIHandler(scalarFS, "static/scalar/", basePrefix, specURL, "index.html")
+}
+
+// embeddedUIHandler creates an HTTP handler that serves static files from an embedded FS,
+// replacing {{SPEC_URL}} in the specified modified files.
+func embeddedUIHandler(fs embed.FS, embedPath, basePrefix, specURL string, modifiedFiles ...string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 
 		cleanPath := strings.TrimSuffix(path, "/")
 
-		// Редирект на index.html если пришел на корень префикса
+		// Redirect to index.html when accessing the prefix root
 		if cleanPath == basePrefix || path == basePrefix+"/" {
 			http.Redirect(w, r, path+"index.html", http.StatusFound)
 			return
 		}
 
-		// Проверка префикса
 		if !strings.HasPrefix(path, basePrefix+"/") && path != basePrefix {
 			http.NotFound(w, r)
 			return
 		}
 
-		// Извлекаем имя файла относительно префикса
 		filePath := strings.TrimPrefix(path, basePrefix+"/")
-
 		if filePath == "" {
 			filePath = "index.html"
 		}
 
-		// Открываем файл из embedded FS
-		f, err := swaggerFS.Open("static/swagger/" + filePath)
+		f, err := fs.Open(embedPath + filePath)
 		if err != nil {
-			log.Printf("ERROR: File not found in embed: static/swagger/%s. Err: %v", filePath, err)
+			log.Printf("ERROR: File not found in embed: %s%s. Err: %v", embedPath, filePath, err)
 			http.NotFound(w, r)
 			return
 		}
 		defer f.Close()
 
 		stat, err := f.Stat()
-		isModifiedFile := (filePath == "index.html" || filePath == "swagger-initializer.js")
+		isModifiedFile := isListed(filePath, modifiedFiles)
 
-		// Устанавливаем заголовки только если файл НЕ будет модифицирован
-		// Или если мы готовы пересчитать длину (что сложнее)
 		if stat != nil && !isModifiedFile {
 			w.Header().Set("Content-Length", strconv.FormatInt(stat.Size(), 10))
 			if !stat.ModTime().IsZero() {
@@ -61,10 +73,8 @@ func SwaggerUIHandler(basePrefix string, specURL string) http.Handler {
 			}
 		}
 
-		// Устанавливаем Content-Type ДО записи любого контента
 		setContentType(w, filePath)
 
-		// Обрабатываем файлы, где нужно подменять URL
 		if isModifiedFile {
 			data, err := io.ReadAll(f)
 			if err != nil {
@@ -74,7 +84,6 @@ func SwaggerUIHandler(basePrefix string, specURL string) http.Handler {
 
 			content := strings.Replace(string(data), "{{SPEC_URL}}", specURL, -1)
 
-			// Пишем данные без Content-Length, так как размер изменился
 			_, err = w.Write([]byte(content))
 			if err != nil {
 				log.Printf("Error writing response for %s: %v", filePath, err)
@@ -82,7 +91,6 @@ func SwaggerUIHandler(basePrefix string, specURL string) http.Handler {
 			return
 		}
 
-		// Для остальных файлов просто копируем контент
 		_, err = io.Copy(w, f)
 		if err != nil {
 			log.Printf("Error copying %s to response: %v", filePath, err)
@@ -90,73 +98,8 @@ func SwaggerUIHandler(basePrefix string, specURL string) http.Handler {
 	})
 }
 
-func RedocUIHandler(basePrefix string, specURL string) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
-
-		cleanPath := strings.TrimSuffix(path, "/")
-
-		// Редирект на index.html если пришел на корень префикса
-		if cleanPath == basePrefix || path == basePrefix+"/" {
-			http.Redirect(w, r, path+"index.html", http.StatusFound)
-			return
-		}
-
-		// Проверка префикса
-		if !strings.HasPrefix(path, basePrefix+"/") && path != basePrefix {
-			http.NotFound(w, r)
-			return
-		}
-
-		// Извлекаем имя файла относительно префикса
-		filePath := strings.TrimPrefix(path, basePrefix+"/")
-
-		if filePath == "" {
-			filePath = "index.html"
-		}
-
-		// Открываем файл из embedded FS
-		f, err := redocFS.Open("static/redoc/" + filePath)
-		if err != nil {
-			log.Printf("ERROR: File not found in embed: static/redoc/%s. Err: %v", filePath, err)
-			http.NotFound(w, r)
-			return
-		}
-		defer f.Close()
-
-		stat, err := f.Stat()
-		isModifiedFile := filePath == "index.html"
-
-		if stat != nil && !isModifiedFile {
-			w.Header().Set("Content-Length", strconv.FormatInt(stat.Size(), 10))
-			if !stat.ModTime().IsZero() {
-				w.Header().Set("Last-Modified", stat.ModTime().UTC().Format(http.TimeFormat))
-			}
-		}
-
-		setContentType(w, filePath)
-
-		if isModifiedFile {
-			data, err := io.ReadAll(f)
-			if err != nil {
-				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-				return
-			}
-
-			content := strings.Replace(string(data), "{{SPEC_URL}}", specURL, -1)
-
-			_, err = w.Write([]byte(content))
-			if err != nil {
-				log.Printf("Error writing response for %s: %v", filePath, err)
-			}
-			return
-		}
-
-		_, err = io.Copy(w, f)
-		if err != nil {
-			log.Printf("Error copying %s to response: %v", filePath, err)
-		}
-	})
+func isListed(s string, list []string) bool {
+	return slices.Contains(list, s)
 }
 
 func setContentType(w http.ResponseWriter, path string) {
