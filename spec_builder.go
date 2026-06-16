@@ -10,6 +10,12 @@ import (
 	oa "github.com/arkannsk/elval/pkg/openapi"
 )
 
+// isNumericType returns true if the OpenAPI type is integer or number.
+func isNumericType(t any) bool {
+	ts, ok := t.(string)
+	return ok && (ts == "integer" || ts == "number")
+}
+
 // Info содержит метаданные для OpenAPI спецификации.
 type Info struct {
 	Title       string `json:"title"`
@@ -49,15 +55,42 @@ func normalizeSchema(schema *oa.Schema, refRemap map[string]string) map[string]a
 		return map[string]any{"$ref": ref}
 	}
 
-	// Для array: minimum/maximum → minItems/maxItems
-	if typ, ok := raw["type"]; ok && typ == "array" {
-		if v, ok := raw["minimum"]; ok {
-			raw["minItems"] = v
-			delete(raw, "minimum")
+	typ := ""
+	if t, ok := raw["type"]; ok {
+		typ = t.(string)
+	}
+
+	// Для array: minimum/maximum/minLength/maxLength → minItems/maxItems
+	if typ == "array" {
+		for oldKey, newKey := range map[string]string{
+			"minimum":   "minItems",
+			"maximum":   "maxItems",
+			"minLength": "minItems",
+			"maxLength": "maxItems",
+		} {
+			if v, ok := raw[oldKey]; ok {
+				raw[newKey] = v
+				delete(raw, oldKey)
+			}
 		}
-		if v, ok := raw["maximum"]; ok {
-			raw["maxItems"] = v
-			delete(raw, "maximum")
+	}
+
+	// Приведение типа example: если schema type integer/number, а example — строка, парсим
+	if isNumericType(raw["type"]) {
+		if ex, ok := raw["example"]; ok {
+			switch val := ex.(type) {
+			case string:
+				if typ == "integer" {
+					if parsed, err := strconv.ParseInt(val, 10, 64); err == nil {
+						raw["example"] = parsed
+					}
+				}
+				if typ == "number" {
+					if parsed, err := strconv.ParseFloat(val, 64); err == nil {
+						raw["example"] = parsed
+					}
+				}
+			}
 		}
 	}
 
@@ -105,15 +138,42 @@ func normalizeSchemaFromRaw(raw map[string]any, refRemap map[string]string) map[
 		return map[string]any{"$ref": raw["$ref"]}
 	}
 
-	// Для array: minimum/maximum → minItems/maxItems
-	if typ, ok := raw["type"]; ok && typ == "array" {
-		if v, ok := raw["minimum"]; ok {
-			raw["minItems"] = v
-			delete(raw, "minimum")
+	typ := ""
+	if t, ok := raw["type"]; ok {
+		typ = t.(string)
+	}
+
+	// Для array: minimum/maximum/minLength/maxLength → minItems/maxItems
+	if typ == "array" {
+		for oldKey, newKey := range map[string]string{
+			"minimum":   "minItems",
+			"maximum":   "maxItems",
+			"minLength": "minItems",
+			"maxLength": "maxItems",
+		} {
+			if v, ok := raw[oldKey]; ok {
+				raw[newKey] = v
+				delete(raw, oldKey)
+			}
 		}
-		if v, ok := raw["maximum"]; ok {
-			raw["maxItems"] = v
-			delete(raw, "maximum")
+	}
+
+	// Приведение типа example
+	if isNumericType(raw["type"]) {
+		if ex, ok := raw["example"]; ok {
+			switch val := ex.(type) {
+			case string:
+				if typ == "integer" {
+					if parsed, err := strconv.ParseInt(val, 10, 64); err == nil {
+						raw["example"] = parsed
+					}
+				}
+				if typ == "number" {
+					if parsed, err := strconv.ParseFloat(val, 64); err == nil {
+						raw["example"] = parsed
+					}
+				}
+			}
 		}
 	}
 

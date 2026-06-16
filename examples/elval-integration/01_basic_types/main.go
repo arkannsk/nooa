@@ -24,7 +24,7 @@ func createPrimitives(w http.ResponseWriter, r *http.Request) {
 
 func getPointers(w http.ResponseWriter, r *http.Request) {
 	res := basic_types.WithPointers{
-		Name: strPtr("optional_name"),
+		Name: new("optional_name"),
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(res)
@@ -40,10 +40,6 @@ func createDefaults(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(req)
-}
-
-func strPtr(s string) *string {
-	return &s
 }
 
 func main() {
@@ -72,7 +68,7 @@ func main() {
 		Description("Demonstrates all Go primitive types mapped to OpenAPI schemas").
 		Tags("BasicTypes").
 		OnSuccess(201, "Primitive object created").
-		PossibleErr(http.StatusBadRequest, http.StatusUnauthorized).
+		PossibleErr(errCollection...).
 		RegisterSpecAndMux(mux, spec)
 
 	// GET /pointers — получение объекта с указателями
@@ -82,8 +78,7 @@ func main() {
 		Description("Demonstrates pointer fields (nullable) in OpenAPI").
 		Tags("BasicTypes").
 		OnSuccess(200, "Pointer fields retrieved").
-		Register(mux).
-		RegisterSpec(spec)
+		RegisterSpecAndMux(mux, spec)
 
 	// POST /defaults — объект со значениями по умолчанию
 	nooa.NewRoute[basic_types.WithDefaults, basic_types.WithDefaults](
@@ -93,8 +88,7 @@ func main() {
 		Tags("BasicTypes").
 		OnSuccess(201, "Defaults object created").
 		PossibleErr(http.StatusBadRequest).
-		Register(mux).
-		RegisterSpec(spec)
+		RegisterSpecAndMux(mux, spec)
 
 	// Монтируем документацию
 	nooa.RegisterVersionedAPI("", spec, mux)
@@ -105,3 +99,5 @@ func main() {
 
 	log.Fatal(http.ListenAndServe(":9090", mux))
 }
+
+var errCollection = []int{http.StatusBadRequest, http.StatusUnauthorized}

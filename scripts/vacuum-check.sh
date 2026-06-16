@@ -72,6 +72,8 @@ EXAMPLES=(
     "examples/elval-integration/06_polymorphism"
     "examples/elval-integration/07_rewrite"
     "examples/elval-integration/08_http_params"
+    "examples/elval-integration/09_ignore"
+    "examples/elval-integration/10_validators"
 )
 
 for EXAMPLE in "${EXAMPLES[@]}"; do
