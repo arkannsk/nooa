@@ -76,6 +76,7 @@ EXAMPLES=(
     "examples/elval-integration/10_validators"
     "examples/elval-integration/11_edge_cases"
     "examples/elval-integration/12_custom_types"
+    "examples/elval-integration/13_mixed"
 )
 
 for EXAMPLE in "${EXAMPLES[@]}"; do

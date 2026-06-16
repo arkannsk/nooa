@@ -13,13 +13,20 @@ import (
 func (v *MegaStruct) OaSchema() *oa.Schema {
 	schema := &oa.Schema{
 		Type:       "object",
-		Properties: make(map[string]*oa.Schema, 10),
-		Required:   make([]string, 0, 10),
+		Properties: make(map[string]*oa.Schema, 11),
+		Required:   make([]string, 0, 11),
 		Ref:        v.GlobalRef(),
 	}
 	schema.Deps = []any{
 		new(UserVariant),
 		new(AdminVariant),
+	}
+	{
+		prop := &oa.Schema{}
+
+		prop.Type = "string"
+
+		schema.Properties["id"] = prop
 	}
 	{
 		prop := &oa.Schema{}
@@ -117,14 +124,6 @@ func (v *MegaStruct) OaSchema() *oa.Schema {
 		schema.Properties["customid"] = prop
 	}
 
-	schema.Discriminator = &oa.Discriminator{
-		PropertyName: "kind",
-		Mapping: map[string]string{
-			"admin": "AdminVariant",
-			"user":  "UserVariant",
-		},
-	}
-
 	return schema
 }
 
@@ -135,13 +134,6 @@ func (v *MegaStruct) GlobalRef() string {
 // OaParams возвращает параметры OpenAPI для этой структуры
 func (v *MegaStruct) OaParams() []*oa.Parameter {
 	params := []*oa.Parameter{}
-
-	params = append(params, &oa.Parameter{
-		Name:     "ID",
-		In:       oa.ParamPath,
-		Required: true,
-		Schema:   v.getFieldSchema("ID"),
-	})
 
 	params = append(params, &oa.Parameter{
 		Name:     "IncludeDeleted",
@@ -246,11 +238,6 @@ func (v *MegaStruct) getFieldSchema(fieldName string) *oa.Schema {
 }
 
 func (v *MegaStruct) ParseRequest(r *http.Request) error {
-	{
-		// Parameter: ID (path)
-		// Parsing primitive: string
-		v.ID = r.PathValue("ID")
-	}
 	{
 		// Parameter: IncludeDeleted (query)
 		// Parsing primitive: bools
