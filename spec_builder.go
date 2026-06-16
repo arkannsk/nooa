@@ -38,7 +38,7 @@ func buildSpecFromData(info Info, routes []RouteSpec, schemas map[string]*oa.Sch
 	return map[string]any{
 		"openapi": "3.0.3",
 		"info":    info,
-		"servers": []map[string]any{{"url": "/", "description": "Current server"}},
+		"servers": []map[string]any{{"url": "/", "description": "Local server"}},
 		"paths":   paths,
 		"components": map[string]any{
 			"schemas": normalizedSchemas,
@@ -71,6 +71,55 @@ func fixArrayConstraints(raw map[string]any) {
 			raw[newKey] = v
 			delete(raw, oldKey)
 		}
+	}
+}
+
+// fixStringConstraints converts numeric constraints to string constraints when the schema
+// is a string type. This fixes elval-gen bug where @evl:validate min:N on a rewritten
+// string type generates "minimum" instead of "minLength".
+func fixStringConstraints(raw map[string]any) {
+	typ, _ := raw["type"].(string)
+	if typ != "string" {
+		return
+	}
+	if v, ok := raw["minimum"]; ok {
+		raw["minLength"] = v
+		delete(raw, "minimum")
+	}
+	if v, ok := raw["maximum"]; ok {
+		raw["maxLength"] = v
+		delete(raw, "maximum")
+	}
+}
+
+// inferTypeFromConstraints infers the schema type from present constraint keys.
+// This fixes elval-gen bug where @oa:rewrite.type doesn't inject "type" into the schema.
+// OpenAPI spec requires that constraints like pattern/minLength apply only to string,
+// and minimum/maximum apply only to number/integer.
+func inferTypeFromConstraints(raw map[string]any) {
+	// If type is already set, nothing to do
+	if _, ok := raw["type"]; ok {
+		return
+	}
+	// Infer from constraints
+	if raw["pattern"] != nil || raw["minLength"] != nil || raw["maxLength"] != nil {
+		raw["type"] = "string"
+		return
+	}
+	if raw["minimum"] != nil || raw["maximum"] != nil ||
+		raw["exclusiveMinimum"] != nil || raw["exclusiveMaximum"] != nil {
+		raw["type"] = "number"
+		return
+	}
+	// If we have minItems/maxItems, it's an array
+	if raw["minItems"] != nil || raw["maxItems"] != nil || raw["items"] != nil {
+		raw["type"] = "array"
+		return
+	}
+	// If we have properties, it's an object
+	if raw["properties"] != nil {
+		raw["type"] = "object"
+		return
 	}
 }
 
@@ -136,7 +185,13 @@ func normalizeRawSchema(raw map[string]any, refRemap map[string]string) map[stri
 		return resolveRef(ref, refRemap)
 	}
 
+	// Инференс типа из ограничений (исправление бага elval-gen с @oa:rewrite.type)
+	inferTypeFromConstraints(raw)
+
 	typ, _ := raw["type"].(string)
+
+	// Для string: minimum/maximum → minLength/maxLength (исправление бага elval-gen)
+	fixStringConstraints(raw)
 
 	// Для array: minimum/maximum/minLength/maxLength → minItems/maxItems
 	if typ == "array" {
@@ -407,7 +462,12 @@ func buildOperationRequestBody(op map[string]any, r RouteSpec, schemas map[strin
 		content[ct] = map[string]any{"schema": schemaObj}
 	}
 	if len(content) > 0 {
-		op["requestBody"] = map[string]any{"content": content}
+		reqBody := map[string]any{"content": content}
+		if r.Summary != "" {
+			reqBody["description"] = r.Summary
+		}
+		reqBody["required"] = true
+		op["requestBody"] = reqBody
 	}
 }
 
