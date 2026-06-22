@@ -101,6 +101,8 @@ func main() {
 		Description: "Integration example: query, path, and header parameters with @oa:in annotations",
 	})
 
+	spec.AddTag("Parameters", "HTTP-параметры: query, path, header через @oa:in")
+
 	nooa.NewRoute[httpparams.QueryParams, httpparams.QueryParams](
 		"GET", "/search", handleQueryParams).
 		Summary("Search with query parameters").

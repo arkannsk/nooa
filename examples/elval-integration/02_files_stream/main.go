@@ -134,6 +134,8 @@ func main() {
 		Description: "Integration example: file, stream and byte types mapped to OpenAPI schemas",
 	})
 
+	spec.AddTag("FilesStreams", "Файловые типы и потоки в OpenAPI")
+
 	// POST /standard — стандартные файловые типы
 	nooa.NewRoute[files_streams.StandardFileTypes, files_streams.StandardFileTypes](
 		"POST", "/standard", uploadStandard).

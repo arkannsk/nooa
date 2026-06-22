@@ -21,10 +21,10 @@ type Info struct {
 type SpecTransformer func(spec map[string]any) map[string]any
 
 // buildSpecFromData собирает spec из переданных данных (без глобальных переменных)
-func buildSpecFromData(info Info, routes []RouteSpec, schemas map[string]*oa.Schema, errorSchemas map[int]*errorSchema) map[string]any {
+func buildSpecFromData(info Info, routes []RouteSpec, schemas map[string]*oa.Schema, errorSchemas map[int]*errorSchema, explicitTags map[string]string) map[string]any {
 	refRemap := generateRefRemap(schemas)
 	normalizedSchemas := normalizeAllSchemas(schemas, refRemap)
-	tags := collectTags(routes)
+	tags := collectTags(routes, explicitTags)
 
 	paths := map[string]any{}
 	pathParamRegex := regexp.MustCompile(`\{([^}]+)}`)
@@ -323,19 +323,51 @@ func generateRefRemap(schemas map[string]*oa.Schema) map[string]string {
 func normalizeAllSchemas(schemas map[string]*oa.Schema, refRemap map[string]string) map[string]any {
 	normalized := make(map[string]any, len(schemas))
 	for name, schema := range schemas {
-		normalized[name] = normalizeSchema(schema, refRemap)
+		normalized[name] = normalizeSchemaWithName(schema, refRemap, name)
 	}
 	return normalized
 }
 
-func collectTags(routes []RouteSpec) []map[string]any {
+// normalizeSchemaWithName normalizes a schema and ensures it has a description.
+// If the schema has no description, it generates one from the schema name (e.g. "03_nested.Address").
+func normalizeSchemaWithName(schema *oa.Schema, refRemap map[string]string, schemaName string) map[string]any {
+	normalized := normalizeSchema(schema, refRemap)
+	if normalized == nil {
+		return nil
+	}
+	if _, hasDesc := normalized["description"]; !hasDesc || normalized["description"] == "" {
+		// Generate a human-readable description from the short name.
+		// "03_nested.Address" -> "Address schema"
+		parts := strings.Split(schemaName, ".")
+		typeName := parts[len(parts)-1]
+		normalized["description"] = typeName + " schema"
+	}
+	return normalized
+}
+
+func collectTags(routes []RouteSpec, explicitTags map[string]string) []map[string]any {
 	seen := make(map[string]bool)
 	var tags []map[string]any
+
+	// Сначала добавляем явно зарегистрированные теги (из spec.AddTag)
+	for name, desc := range explicitTags {
+		if name != "" && !seen[name] {
+			seen[name] = true
+			tags = append(tags, map[string]any{"name": name, "description": desc})
+		}
+	}
+
+	// Затем собираем теги из роутов (если тег уже есть — не дублируем)
 	for _, r := range routes {
 		for _, tag := range r.Tags {
 			if tag != "" && !seen[tag] {
 				seen[tag] = true
-				tags = append(tags, map[string]any{"name": tag, "description": ""})
+				// Если описание задано явно — используем его, иначе пустое
+				desc := ""
+				if d, ok := explicitTags[tag]; ok {
+					desc = d
+				}
+				tags = append(tags, map[string]any{"name": tag, "description": desc})
 			}
 		}
 	}

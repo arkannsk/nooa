@@ -110,6 +110,10 @@ func main() {
 	spec.AddError(http.StatusBadRequest, new(models.ValidationError), "Validation failed")
 	spec.AddError(http.StatusInternalServerError, new(models.APIError), "Internal server error")
 
+	spec.AddTag("Mixed", "Комплексный пример, объединяющий все фичи nooa")
+	spec.AddTag("Variants", "Полиморфные варианты: UserVariant и AdminVariant")
+	spec.AddTag("Nested", "Вложенные структуры и их маршруты")
+
 	// POST /mega — полный пример со всеми фичами (body + валидация)
 	nooa.NewRoute[mixed.MegaStruct, mixed.MegaStruct](
 		"POST", "/mega", handleCreateMegaStruct).

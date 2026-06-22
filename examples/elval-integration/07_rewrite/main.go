@@ -80,6 +80,9 @@ func main() {
 	spec.RegisterModel("GeometryDocs", new(rw.GeometryDocs))
 	spec.RegisterModel("PointDocs", new(rw.PointDocs))
 
+	spec.AddTag("Rewrite", "Переопределение типов и ссылок через @oa:rewrite")
+	spec.AddTag("Geo", "GeoJSON-типы с переопределением через @oa:rewrite.ref")
+
 	nooa.NewRoute[rw.WithRewriteType, rw.WithRewriteType](
 		"GET", "/rewrite-type", handleRewriteType).
 		Summary("Get struct with rewritten types").

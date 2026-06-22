@@ -21,6 +21,7 @@ type Spec struct {
 	routes       []RouteSpec
 	schemas      map[string]*oa.Schema
 	errors       map[int]*errorSchema
+	tags         map[string]string // name -> description
 	info         Info
 	transformers []SpecTransformer
 	mu           sync.RWMutex
@@ -33,6 +34,7 @@ func NewSpec(info Info) *Spec {
 	return &Spec{
 		schemas: make(map[string]*oa.Schema),
 		errors:  make(map[int]*errorSchema),
+		tags:    make(map[string]string),
 		info:    info,
 	}
 }
@@ -64,7 +66,7 @@ func (s *Spec) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // generate строит JSON один раз при первом запросе (thread-safe).
 func (s *Spec) generate() []byte {
 	if !s.generated {
-		specMap := buildSpecFromData(s.info, s.routes, s.schemas, s.errors)
+		specMap := buildSpecFromData(s.info, s.routes, s.schemas, s.errors, s.tags)
 		for _, t := range s.transformers {
 			specMap = t(specMap)
 		}
@@ -128,4 +130,28 @@ func (s *Spec) LookupError(status int) *errorSchema {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.errors[status]
+}
+
+// AddTag регистрирует тег с описанием.
+// Теги используются для группировки маршрутов в OpenAPI спецификации.
+// Описание отображается в Swagger/Redoc/Scalar UI.
+//
+//	spec.AddTag("Users", "Операции с пользователями")
+//	spec.AddTag("Auth", "Аутентификация и авторизация")
+func (s *Spec) AddTag(name, description string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.tags[name] = description
+	s.generated = false
+}
+
+// GetTags возвращает копию зарегистрированных тегов.
+func (s *Spec) GetTags() map[string]string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	copy := make(map[string]string, len(s.tags))
+	for k, v := range s.tags {
+		copy[k] = v
+	}
+	return copy
 }

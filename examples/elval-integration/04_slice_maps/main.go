@@ -68,6 +68,8 @@ func main() {
 		Description: "Integration example: slices, maps, and fixed arrays",
 	})
 
+	spec.AddTag("Collections", "Слайсы, карты и фиксированные массивы")
+
 	nooa.NewRoute[collections.SliceVariations, collections.SliceVariations](
 		"GET", "/slices", handleSliceVariations).
 		Summary("Get slice variations").

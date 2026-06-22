@@ -62,6 +62,8 @@ func main() {
 	spec.AddError(http.StatusBadRequest, new(models.ValidationError), "Validation failed")
 	spec.AddError(http.StatusInternalServerError, new(models.APIError), "Internal server error")
 
+	spec.AddTag("Custom Types", "Пользовательские типы: алиасы, кастомные reader'ы, вложенные структуры")
+
 	nooa.NewRoute[custom.WithAliases, custom.WithAliases](
 		"POST", "/aliases", handleWithAliases).
 		Summary("Type aliases with validation").
