@@ -14,6 +14,7 @@ func (v *StandardFileTypes) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 5),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Upload request with standard file/stream types"
 	{
 		prop := &oa.Schema{}
 		prop.Type = "string"
@@ -79,6 +80,7 @@ func (v *CustomWithAnnotations) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 3),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Upload with custom reader types"
 	{
 		prop := &oa.Schema{}
 		prop.Type = "string"
@@ -124,6 +126,7 @@ func (v *MixedRequest) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 5),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Mixed upload request"
 	{
 		prop := &oa.Schema{}
 		prop.Type = "string"
@@ -176,6 +179,7 @@ func (v *MixedRequest) OaSchema() *oa.Schema {
 		prop.Items.Type = "string"
 
 		schema.Required = append(schema.Required, "categories")
+
 		prop.Minimum = oa.Ptr[float64](1)
 
 		prop.Description = "At least one category"

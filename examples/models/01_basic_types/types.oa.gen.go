@@ -14,6 +14,7 @@ func (v *SimplePrimitives) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 6),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Struct with all primitive Go types"
 	{
 		prop := &oa.Schema{}
 
@@ -30,7 +31,7 @@ func (v *SimplePrimitives) OaSchema() *oa.Schema {
 		prop.Type = "integer"
 
 		prop.Description = "Integer field"
-		prop.Example = "42"
+		prop.Example = 42
 
 		schema.Properties["count"] = prop
 	}
@@ -40,7 +41,7 @@ func (v *SimplePrimitives) OaSchema() *oa.Schema {
 		prop.Type = "integer"
 
 		prop.Description = "64-bit integer"
-		prop.Example = "9223372036854775807"
+		prop.Example = 9223372036854775807
 
 		schema.Properties["bignumber"] = prop
 	}
@@ -50,7 +51,7 @@ func (v *SimplePrimitives) OaSchema() *oa.Schema {
 		prop.Type = "number"
 
 		prop.Description = "Float value"
-		prop.Example = "3.14"
+		prop.Example = 3.14
 
 		schema.Properties["rate"] = prop
 	}
@@ -60,7 +61,7 @@ func (v *SimplePrimitives) OaSchema() *oa.Schema {
 		prop.Type = "boolean"
 
 		prop.Description = "Boolean flag"
-		prop.Example = "true"
+		prop.Example = true
 
 		schema.Properties["active"] = prop
 	}
@@ -89,8 +90,11 @@ func (v *WithPointers) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 3),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Struct with pointer fields (nullable in OpenAPI)"
 	{
 		prop := &oa.Schema{}
+
+		prop.Type = "string"
 
 		prop.Description = "Optional name"
 
@@ -99,12 +103,16 @@ func (v *WithPointers) OaSchema() *oa.Schema {
 	{
 		prop := &oa.Schema{}
 
+		prop.Type = "integer"
+
 		prop.Description = "Optional count"
 
 		schema.Properties["count"] = prop
 	}
 	{
 		prop := &oa.Schema{}
+
+		prop.Type = "boolean"
 
 		prop.Description = "Optional flag"
 
@@ -125,6 +133,7 @@ func (v *WithDefaults) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 3),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Struct with default values"
 	{
 		prop := &oa.Schema{}
 

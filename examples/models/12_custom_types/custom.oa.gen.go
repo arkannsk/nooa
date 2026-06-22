@@ -14,6 +14,7 @@ func (v *WithAliases) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 2),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Struct with type aliases"
 	{
 		prop := &oa.Schema{}
 
@@ -25,6 +26,7 @@ func (v *WithAliases) OaSchema() *oa.Schema {
 		prop := &oa.Schema{}
 
 		prop.Minimum = oa.Ptr[float64](3)
+
 		prop.Pattern = `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
 
 		prop.Description = "Custom string with validation"
@@ -68,6 +70,7 @@ func (v *WithCustomReader) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 1),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Struct with custom reader marked as file"
 	{
 		prop := &oa.Schema{}
 		prop.Type = "string"
@@ -92,6 +95,7 @@ func (v *EmbedStruct) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 2),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Base fields"
 	{
 		prop := &oa.Schema{}
 
@@ -125,8 +129,10 @@ func (v *WithEmbed) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 2),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Struct with embedded fields"
 	{
 		prop := &oa.Schema{}
+		prop.Type = "object"
 		prop.Ref = "#/components/schemas/github.com/arkannsk/nooa/examples/models/12_custom_types.EmbedStruct"
 
 		schema.Properties["embedstruct"] = prop

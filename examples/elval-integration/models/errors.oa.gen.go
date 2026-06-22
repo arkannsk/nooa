@@ -40,7 +40,7 @@ func (v *ValidationError) OaSchema() *oa.Schema {
 		prop.Type = "integer"
 
 		prop.Description = "HTTP status code"
-		prop.Example = "400"
+		prop.Example = 400
 
 		schema.Properties["status"] = prop
 	}
@@ -85,7 +85,7 @@ func (v *UnauthorizedError) OaSchema() *oa.Schema {
 		prop.Type = "integer"
 
 		prop.Description = "HTTP status code"
-		prop.Example = "401"
+		prop.Example = 401
 
 		schema.Properties["status"] = prop
 	}
@@ -130,7 +130,7 @@ func (v *ForbiddenError) OaSchema() *oa.Schema {
 		prop.Type = "integer"
 
 		prop.Description = "HTTP status code"
-		prop.Example = "403"
+		prop.Example = 403
 
 		schema.Properties["status"] = prop
 	}
@@ -175,7 +175,7 @@ func (v *NotFoundError) OaSchema() *oa.Schema {
 		prop.Type = "integer"
 
 		prop.Description = "HTTP status code"
-		prop.Example = "404"
+		prop.Example = 404
 
 		schema.Properties["status"] = prop
 	}
@@ -220,7 +220,7 @@ func (v *ConflictError) OaSchema() *oa.Schema {
 		prop.Type = "integer"
 
 		prop.Description = "HTTP status code"
-		prop.Example = "409"
+		prop.Example = 409
 
 		schema.Properties["status"] = prop
 	}
@@ -265,7 +265,7 @@ func (v *RateLimitError) OaSchema() *oa.Schema {
 		prop.Type = "integer"
 
 		prop.Description = "HTTP status code"
-		prop.Example = "429"
+		prop.Example = 429
 
 		schema.Properties["status"] = prop
 	}

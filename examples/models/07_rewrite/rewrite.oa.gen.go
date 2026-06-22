@@ -14,6 +14,7 @@ func (v *WithRewriteType) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 3),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Struct with type rewriting"
 	{
 		prop := &oa.Schema{}
 		prop.Type = "string"
@@ -54,8 +55,10 @@ func (v *WithRewriteRef) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 1),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Struct referencing local stub schema"
 	{
 		prop := &oa.Schema{}
+		prop.Type = "object"
 		prop.Ref = "#/components/schemas/CommonMetadata"
 
 		prop.Description = "Reference to local stub"
@@ -77,6 +80,7 @@ func (v *CommonMetadata) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 2),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Reusable metadata schema"
 	{
 		prop := &oa.Schema{}
 
@@ -110,8 +114,10 @@ func (v *CreateLocationRequest) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 2),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Request to create a location with a geojson feature"
 	{
 		prop := &oa.Schema{}
+		prop.Type = "object"
 		prop.Ref = "#/components/schemas/FeatureDocs"
 
 		schema.Properties["feature"] = prop
@@ -140,17 +146,22 @@ func (v *FeatureDocs) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 4),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "GeoJSON feature with type, geometry and properties"
 	{
 		prop := &oa.Schema{}
 
 		prop.Type = "string"
 
 		prop.Description = "Must be 'Feature'"
+		prop.Enum = []any{
+			"Feature",
+		}
 
 		schema.Properties["type"] = prop
 	}
 	{
 		prop := &oa.Schema{}
+		prop.Type = "object"
 		prop.Ref = "#/components/schemas/GeometryDocs"
 
 		prop.Description = "GeoJSON geometry"
@@ -192,12 +203,22 @@ func (v *GeometryDocs) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 2),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "GeoJSON geometry object"
 	{
 		prop := &oa.Schema{}
 
 		prop.Type = "string"
 
 		prop.Description = "Geometry type"
+		prop.Enum = []any{
+			"Point",
+			"LineString",
+			"Polygon",
+			"MultiPoint",
+			"MultiLineString",
+			"MultiPolygon",
+			"GeometryCollection",
+		}
 
 		schema.Properties["type"] = prop
 	}
@@ -224,8 +245,10 @@ func (v *CreateLocationWithPoint) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 2),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Request to create a location with an orb point"
 	{
 		prop := &oa.Schema{}
+		prop.Type = "object"
 		prop.Ref = "#/components/schemas/PointDocs"
 
 		schema.Properties["location"] = prop
@@ -254,6 +277,7 @@ func (v *PointDocs) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 2),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "A geographic point represented as [longitude, latitude]"
 	{
 		prop := &oa.Schema{}
 

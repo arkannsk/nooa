@@ -14,6 +14,7 @@ func (v *EmptyStruct) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 0),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Empty struct (no fields)"
 
 	return schema
 }
@@ -29,8 +30,11 @@ func (v *PointerChain) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 3),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Multiple levels of pointers"
 	{
 		prop := &oa.Schema{}
+
+		prop.Type = "string"
 
 		prop.Description = "String pointer"
 
@@ -45,6 +49,7 @@ func (v *PointerChain) OaSchema() *oa.Schema {
 	}
 	{
 		prop := &oa.Schema{}
+		prop.Type = "object"
 		prop.Ref = "#/components/schemas/github.com/arkannsk/nooa/examples/models/11_edge_cases.Nested"
 
 		prop.Description = "Pointer to struct"
@@ -88,8 +93,10 @@ func (v *CircularRefA) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 1),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Node A (circular reference)"
 	{
 		prop := &oa.Schema{}
+		prop.Type = "object"
 		prop.Ref = "#/components/schemas/github.com/arkannsk/nooa/examples/models/11_edge_cases.CircularRefB"
 
 		prop.Description = "Reference to B"
@@ -111,8 +118,10 @@ func (v *CircularRefB) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 1),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Node B (circular reference)"
 	{
 		prop := &oa.Schema{}
+		prop.Type = "object"
 		prop.Ref = "#/components/schemas/github.com/arkannsk/nooa/examples/models/11_edge_cases.CircularRefA"
 
 		prop.Description = "Reference to A"
@@ -178,6 +187,7 @@ func (v *WithInterface) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 1),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Struct with interface field"
 	schema.Deps = []any{
 		new(StringEdgeValue),
 		new(NumberEdgeValue),
@@ -209,8 +219,11 @@ func (v *WithUntypedNil) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 3),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Struct with nullable fields"
 	{
 		prop := &oa.Schema{}
+
+		prop.Type = "string"
 
 		prop.Description = "Nullable string"
 
@@ -218,6 +231,7 @@ func (v *WithUntypedNil) OaSchema() *oa.Schema {
 	}
 	{
 		prop := &oa.Schema{}
+		prop.Type = "object"
 		prop.Ref = "#/components/schemas/github.com/arkannsk/nooa/examples/models/11_edge_cases.Nested"
 
 		prop.Description = "Nullable struct"

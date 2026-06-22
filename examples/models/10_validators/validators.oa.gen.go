@@ -14,13 +14,16 @@ func (v *AllStringValidators) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 8),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "String field with all validators"
 	{
 		prop := &oa.Schema{}
 
 		prop.Type = "string"
 
 		schema.Required = append(schema.Required, "name")
+
 		prop.MinLength = oa.Ptr[int64](3)
+
 		prop.MaxLength = oa.Ptr[int64](50)
 
 		prop.Description = "Name with length constraints"
@@ -115,12 +118,14 @@ func (v *AllNumericValidators) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 8),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Numeric field with all validators"
 	{
 		prop := &oa.Schema{}
 
 		prop.Type = "integer"
 
 		prop.Minimum = oa.Ptr[float64](0)
+
 		prop.Maximum = oa.Ptr[float64](100)
 
 		prop.Description = "Percentage"
@@ -215,6 +220,7 @@ func (v *AllEnumAndSliceValidators) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 3),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Enum and slice validators"
 	{
 		prop := &oa.Schema{}
 
@@ -235,7 +241,9 @@ func (v *AllEnumAndSliceValidators) OaSchema() *oa.Schema {
 		prop.Items.Type = "string"
 
 		schema.Required = append(schema.Required, "tags")
+
 		prop.Minimum = oa.Ptr[float64](1)
+
 		prop.Maximum = oa.Ptr[float64](10)
 
 		prop.Description = "Tags with constraints"
@@ -272,6 +280,7 @@ func (v *DateAndDurationValidators) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 3),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Date and duration validators"
 	{
 		prop := &oa.Schema{}
 

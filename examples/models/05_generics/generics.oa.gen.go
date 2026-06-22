@@ -14,6 +14,7 @@ func (v *GenericStruct) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 4),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Struct using generic wrappers"
 	{
 		prop := &oa.Schema{}
 		prop.Type = "string"
@@ -64,6 +65,7 @@ func (v *Item) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 2),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Generic item"
 	{
 		prop := &oa.Schema{}
 
@@ -93,6 +95,7 @@ func (v *WithCustomGeneric) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 1),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Struct with custom generic type"
 	{
 		prop := &oa.Schema{}
 		prop.Type = "string"
