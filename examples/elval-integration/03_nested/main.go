@@ -34,6 +34,8 @@ func main() {
 		Description: "Integration example: nested structures",
 	})
 
+	spec.AddTag("Nested", "Вложенные структуры и автоматическое обнаружение зависимостей")
+
 	nooa.NewRoute[nested_structs.UserWithAddress, nested_structs.UserWithAddress](
 		"GET", "/user", handleNested).
 		Summary("Get nested user").

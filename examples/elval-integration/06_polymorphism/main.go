@@ -59,6 +59,9 @@ func main() {
 		Description: "Integration example: oneOf, discriminator, and polymorphic types",
 	})
 
+	spec.AddTag("Polymorphism", "Полиморфизм: oneOf, discriminator и полиморфные типы")
+	spec.AddTag("Shapes", "Геометрические фигуры с дискриминатором")
+
 	nooa.NewRoute[poly.Container, poly.Container](
 		"GET", "/container", handleContainer).
 		Summary("Get container with shape").

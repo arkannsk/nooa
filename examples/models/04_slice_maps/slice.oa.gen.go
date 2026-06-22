@@ -14,6 +14,7 @@ func (v *SliceVariations) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 5),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Struct with various slice types"
 	{
 		prop := &oa.Schema{}
 
@@ -83,6 +84,7 @@ func (v *Item) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 2),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Generic item"
 	{
 		prop := &oa.Schema{}
 
@@ -116,8 +118,11 @@ func (v *MapVariations) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 4),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Struct with map fields"
 	{
 		prop := &oa.Schema{}
+
+		prop.Type = "object"
 
 		prop.Description = "String-to-string map"
 		prop.Example = "{\"key\": \"value\"}"
@@ -127,6 +132,8 @@ func (v *MapVariations) OaSchema() *oa.Schema {
 	{
 		prop := &oa.Schema{}
 
+		prop.Type = "object"
+
 		prop.Description = "String-to-int map"
 
 		schema.Properties["counts"] = prop
@@ -134,12 +141,16 @@ func (v *MapVariations) OaSchema() *oa.Schema {
 	{
 		prop := &oa.Schema{}
 
+		prop.Type = "object"
+
 		prop.Description = "String-to-struct map"
 
 		schema.Properties["items"] = prop
 	}
 	{
 		prop := &oa.Schema{}
+
+		prop.Type = "object"
 
 		prop.Description = "Nested map"
 
@@ -160,6 +171,7 @@ func (v *ArrayFixed) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 2),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Struct with fixed-size arrays"
 	{
 		prop := &oa.Schema{}
 

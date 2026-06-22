@@ -49,6 +49,8 @@ func main() {
 		Description: "Integration example: @oa:ignore annotation on types and fields",
 	})
 
+	spec.AddTag("Ignore", "Исключение полей и типов из OpenAPI через @oa:ignore")
+
 	nooa.NewRoute[ign.WithIgnoredField, ign.WithIgnoredField](
 		"GET", "/ignored-field", handleWithIgnoredField).
 		Summary("Struct with an ignored field").

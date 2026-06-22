@@ -19,6 +19,7 @@ func (v *Shape) OaSchema() *oa.Schema {
 			new(RectangleShape),
 		},
 	}
+	schema.Description = "Geometric shape (polymorphic)"
 
 	schema.Discriminator = &oa.Discriminator{
 		PropertyName: "type",
@@ -42,10 +43,15 @@ func (v *CircleShape) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 2),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Circle geometry"
 	{
 		prop := &oa.Schema{}
 
 		prop.Type = "string"
+
+		prop.Enum = []any{
+			"circle",
+		}
 
 		schema.Properties["type"] = prop
 	}
@@ -58,6 +64,7 @@ func (v *CircleShape) OaSchema() *oa.Schema {
 
 		schema.Properties["radius"] = prop
 	}
+	schema.Required = append(schema.Required, "type")
 
 	return schema
 }
@@ -73,10 +80,15 @@ func (v *RectangleShape) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 3),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Rectangle geometry"
 	{
 		prop := &oa.Schema{}
 
 		prop.Type = "string"
+
+		prop.Enum = []any{
+			"rectangle",
+		}
 
 		schema.Properties["type"] = prop
 	}
@@ -98,6 +110,7 @@ func (v *RectangleShape) OaSchema() *oa.Schema {
 
 		schema.Properties["height"] = prop
 	}
+	schema.Required = append(schema.Required, "type")
 
 	return schema
 }
@@ -113,8 +126,10 @@ func (v *Container) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 1),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Container with polymorphic shape"
 	{
 		prop := &oa.Schema{}
+		prop.Type = "object"
 		prop.Ref = "#/components/schemas/github.com/arkannsk/nooa/examples/models/06_polymorphism.Shape"
 
 		prop.Description = "Shape variant"
@@ -136,6 +151,7 @@ func (v *OneOfExample) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 1),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Value that can be string or number"
 	schema.Deps = []any{
 		new(StringValue),
 		new(NumberValue),

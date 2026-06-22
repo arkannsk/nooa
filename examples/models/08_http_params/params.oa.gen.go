@@ -17,6 +17,7 @@ func (v *QueryParams) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 1),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Request with query parameters"
 	{
 		prop := &oa.Schema{}
 
@@ -153,6 +154,7 @@ func (v *PathParams) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 1),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Request with path parameters"
 	{
 		prop := &oa.Schema{}
 
@@ -240,6 +242,7 @@ func (v *HeaderParams) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 1),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Request with header parameters"
 	{
 		prop := &oa.Schema{}
 
@@ -321,6 +324,7 @@ func (v *MixedParams) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 1),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Request with mixed parameter locations"
 	{
 		prop := &oa.Schema{}
 

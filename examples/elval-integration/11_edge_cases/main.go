@@ -63,6 +63,8 @@ func main() {
 	spec.AddError(http.StatusBadRequest, new(models.ValidationError), "Validation failed")
 	spec.AddError(http.StatusInternalServerError, new(models.APIError), "Internal server error")
 
+	spec.AddTag("Edge Cases", "Пограничные случаи: пустые структуры, цепочки указателей, циклические ссылки, oneOf, nil")
+
 	nooa.NewRoute[edge.EmptyStruct, edge.EmptyStruct](
 		"GET", "/empty", handleEmptyStruct).
 		Summary("Empty struct").

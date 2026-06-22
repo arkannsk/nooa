@@ -21,10 +21,10 @@ type Info struct {
 type SpecTransformer func(spec map[string]any) map[string]any
 
 // buildSpecFromData собирает spec из переданных данных (без глобальных переменных)
-func buildSpecFromData(info Info, routes []RouteSpec, schemas map[string]*oa.Schema, errorSchemas map[int]*errorSchema) map[string]any {
+func buildSpecFromData(info Info, routes []RouteSpec, schemas map[string]*oa.Schema, errorSchemas map[int]*errorSchema, explicitTags map[string]string, securitySchemes []SecurityScheme, defaultSecurity []SecurityRequirement) map[string]any {
 	refRemap := generateRefRemap(schemas)
 	normalizedSchemas := normalizeAllSchemas(schemas, refRemap)
-	tags := collectTags(routes)
+	tags := collectTags(routes, explicitTags)
 
 	paths := map[string]any{}
 	pathParamRegex := regexp.MustCompile(`\{([^}]+)}`)
@@ -35,16 +35,20 @@ func buildSpecFromData(info Info, routes []RouteSpec, schemas map[string]*oa.Sch
 		pathItem[strings.ToLower(r.Method)] = op
 	}
 
-	return map[string]any{
+	spec := map[string]any{
 		"openapi": "3.0.3",
 		"info":    info,
-		"servers": []map[string]any{{"url": "/", "description": "Local server"}},
+		"servers": []map[string]any{{"url": ".", "description": "Local server"}},
 		"paths":   paths,
 		"components": map[string]any{
 			"schemas": normalizedSchemas,
 		},
 		"tags": tags,
 	}
+
+	buildSpecSecuritySection(spec, securitySchemes, defaultSecurity, routes)
+
+	return spec
 }
 
 // resolveRef remaps a $ref value through refRemap and returns an isolated object.
@@ -121,6 +125,28 @@ func inferTypeFromConstraints(raw map[string]any) {
 		raw["type"] = "object"
 		return
 	}
+	// If we have additionalProperties, it's a map (object)
+	if raw["additionalProperties"] != nil {
+		raw["type"] = "object"
+		return
+	}
+	// Infer from enum values
+	if enumVal, ok := raw["enum"]; ok {
+		if enumSlice, ok := enumVal.([]any); ok && len(enumSlice) > 0 {
+			switch enumSlice[0].(type) {
+			case string:
+				raw["type"] = "string"
+			case float64:
+				raw["type"] = "number"
+			case bool:
+				raw["type"] = "boolean"
+			}
+			return
+		}
+	}
+	// Fallback: empty schema (no type, no constraints) — default to object
+	// This covers elval-gen cases like **T or *[]T where type is lost
+	raw["type"] = "object"
 }
 
 // coerceNumericExample converts a string example to int/float when the schema type requires it.
@@ -301,19 +327,51 @@ func generateRefRemap(schemas map[string]*oa.Schema) map[string]string {
 func normalizeAllSchemas(schemas map[string]*oa.Schema, refRemap map[string]string) map[string]any {
 	normalized := make(map[string]any, len(schemas))
 	for name, schema := range schemas {
-		normalized[name] = normalizeSchema(schema, refRemap)
+		normalized[name] = normalizeSchemaWithName(schema, refRemap, name)
 	}
 	return normalized
 }
 
-func collectTags(routes []RouteSpec) []map[string]any {
+// normalizeSchemaWithName normalizes a schema and ensures it has a description.
+// If the schema has no description, it generates one from the schema name (e.g. "03_nested.Address").
+func normalizeSchemaWithName(schema *oa.Schema, refRemap map[string]string, schemaName string) map[string]any {
+	normalized := normalizeSchema(schema, refRemap)
+	if normalized == nil {
+		return nil
+	}
+	if _, hasDesc := normalized["description"]; !hasDesc || normalized["description"] == "" {
+		// Generate a human-readable description from the short name.
+		// "03_nested.Address" -> "Address schema"
+		parts := strings.Split(schemaName, ".")
+		typeName := parts[len(parts)-1]
+		normalized["description"] = typeName + " schema"
+	}
+	return normalized
+}
+
+func collectTags(routes []RouteSpec, explicitTags map[string]string) []map[string]any {
 	seen := make(map[string]bool)
 	var tags []map[string]any
+
+	// Сначала добавляем явно зарегистрированные теги (из spec.AddTag)
+	for name, desc := range explicitTags {
+		if name != "" && !seen[name] {
+			seen[name] = true
+			tags = append(tags, map[string]any{"name": name, "description": desc})
+		}
+	}
+
+	// Затем собираем теги из роутов (если тег уже есть — не дублируем)
 	for _, r := range routes {
 		for _, tag := range r.Tags {
 			if tag != "" && !seen[tag] {
 				seen[tag] = true
-				tags = append(tags, map[string]any{"name": tag, "description": ""})
+				// Если описание задано явно — используем его, иначе пустое
+				desc := ""
+				if d, ok := explicitTags[tag]; ok {
+					desc = d
+				}
+				tags = append(tags, map[string]any{"name": tag, "description": desc})
 			}
 		}
 	}
@@ -337,13 +395,13 @@ func buildOperation(r RouteSpec, refRemap map[string]string, schemas map[string]
 		"description": r.Description,
 		"tags":        r.Tags,
 		"deprecated":  r.Deprecated,
-		"responses":   buildResponses(r, errorSchemas),
 	}
 
 	buildOperationSecurity(op, r.Security)
 	buildOperationExtensions(op, r.Extensions)
 	buildOperationParameters(op, r, refRemap, pathParamRegex)
 	buildOperationRequestBody(op, r, schemas)
+	op["responses"] = buildResponses(r, errorSchemas, schemas)
 
 	return op
 }
@@ -352,9 +410,15 @@ func buildOperationSecurity(op map[string]any, secReqs []SecurityRequirement) {
 	if len(secReqs) == 0 {
 		return
 	}
-	secList := make([]map[string][]string, 0, len(secReqs))
+	secList := make([]any, 0, len(secReqs))
 	for _, s := range secReqs {
-		secList = append(secList, map[string][]string{s.Scheme: s.Scopes})
+		entry := map[string]any{}
+		if len(s.Scopes) > 0 {
+			entry[s.Scheme] = s.Scopes
+		} else {
+			entry[s.Scheme] = []string{}
+		}
+		secList = append(secList, entry)
 	}
 	op["security"] = secList
 }
@@ -396,6 +460,8 @@ func buildParamsFromSpec(parameters []*oa.Parameter, refRemap map[string]string)
 		}
 		if p.Description != "" {
 			paramMap["description"] = p.Description
+		} else {
+			paramMap["description"] = p.Name + " parameter"
 		}
 		if p.Required {
 			paramMap["required"] = true
@@ -455,7 +521,11 @@ func buildOperationRequestBody(op map[string]any, r RouteSpec, schemas map[strin
 	for _, ct := range contentTypes {
 		var schemaObj map[string]any
 		if r.RequestBodySchemaName != "" {
-			schemaObj = map[string]any{"$ref": "#/components/schemas/" + r.RequestBodySchemaName}
+			if _, exists := schemas[r.RequestBodySchemaName]; exists {
+				schemaObj = map[string]any{"$ref": "#/components/schemas/" + r.RequestBodySchemaName}
+			} else {
+				schemaObj = map[string]any{"type": "object"}
+			}
 		} else {
 			schemaObj = map[string]any{"type": "object", "description": "Request body"}
 		}
@@ -471,7 +541,7 @@ func buildOperationRequestBody(op map[string]any, r RouteSpec, schemas map[strin
 	}
 }
 
-func buildResponses(r RouteSpec, errorSchemas map[int]*errorSchema) map[string]any {
+func buildResponses(r RouteSpec, errorSchemas map[int]*errorSchema, schemas map[string]*oa.Schema) map[string]any {
 	resps := make(map[string]any)
 
 	for _, resp := range r.Responses {
@@ -485,7 +555,7 @@ func buildResponses(r RouteSpec, errorSchemas map[int]*errorSchema) map[string]a
 
 		content := map[string]any{}
 		for _, ct := range resp.ContentTypes {
-			schemaObj := buildResponseSchemaObject(resp, ct, schemaName, hasSchema, errorSchemas)
+			schemaObj := buildResponseSchemaObject(resp, ct, schemaName, hasSchema, errorSchemas, schemas)
 			content[ct] = map[string]any{"schema": schemaObj}
 		}
 
@@ -506,14 +576,21 @@ func buildResponses(r RouteSpec, errorSchemas map[int]*errorSchema) map[string]a
 
 // buildResponseSchemaObject определяет schema object для response.
 // Приоритет: явная схема > зарегистрированная схема ошибки > default (object или binary).
-func buildResponseSchemaObject(resp ResponseSpec, ct string, schemaName string, hasSchema bool, errorSchemas map[int]*errorSchema) map[string]any {
+// Если схема указана, но не найдена в реестре — используется fallback {"type": "object"}.
+func buildResponseSchemaObject(resp ResponseSpec, ct string, schemaName string, hasSchema bool, errorSchemas map[int]*errorSchema, schemas map[string]*oa.Schema) map[string]any {
 	if hasSchema && schemaName != "" {
-		return map[string]any{"$ref": "#/components/schemas/" + schemaName}
+		if _, exists := schemas[schemaName]; exists {
+			return map[string]any{"$ref": "#/components/schemas/" + schemaName}
+		}
+		// Схема не зарегистрирована (например, тип без OaSchema) — fallback
+		return map[string]any{"type": "object"}
 	}
 
 	if resp.IsError {
 		if es := errorSchemas[resp.Status]; es != nil && es.schemaName != "" {
-			return map[string]any{"$ref": "#/components/schemas/" + es.schemaName}
+			if _, exists := schemas[es.schemaName]; exists {
+				return map[string]any{"$ref": "#/components/schemas/" + es.schemaName}
+			}
 		}
 	}
 

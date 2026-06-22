@@ -7,6 +7,31 @@ import (
 	oa "github.com/arkannsk/elval/pkg/openapi"
 )
 
+func (v *WithIgnoredField) OaSchema() *oa.Schema {
+	schema := &oa.Schema{
+		Type:       "object",
+		Properties: make(map[string]*oa.Schema, 1),
+		Required:   make([]string, 0, 1),
+		Ref:        v.GlobalRef(),
+	}
+	schema.Description = "Struct with ignored field"
+	{
+		prop := &oa.Schema{}
+
+		prop.Type = "string"
+
+		prop.Description = "Public field"
+
+		schema.Properties["public"] = prop
+	}
+
+	return schema
+}
+
+func (v *WithIgnoredField) GlobalRef() string {
+	return "github.com/arkannsk/nooa/examples/models/09_ignore.WithIgnoredField"
+}
+
 func (v *WithOverride) OaSchema() *oa.Schema {
 	schema := &oa.Schema{
 		Type:       "object",
@@ -14,6 +39,7 @@ func (v *WithOverride) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 1),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Field overrides ignored type"
 	{
 		prop := &oa.Schema{}
 		prop.Type = "string"
@@ -38,6 +64,7 @@ func (v *OnlyIgnoredFields) OaSchema() *oa.Schema {
 		Required:   make([]string, 0, 0),
 		Ref:        v.GlobalRef(),
 	}
+	schema.Description = "Struct with all fields ignored"
 
 	return schema
 }

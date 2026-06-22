@@ -110,6 +110,23 @@ func main() {
 	spec.AddError(http.StatusBadRequest, new(models.ValidationError), "Validation failed")
 	spec.AddError(http.StatusInternalServerError, new(models.APIError), "Internal server error")
 
+	spec.AddTag("Mixed", "Комплексный пример, объединяющий все фичи nooa")
+	spec.AddTag("Variants", "Полиморфные варианты: UserVariant и AdminVariant")
+	spec.AddTag("Nested", "Вложенные структуры и их маршруты")
+
+	spec.AddSecurityScheme("bearerAuth", nooa.SecuritySchemeBearer("JWT authorization"))
+	spec.AddSecurityScheme("basicAuth", nooa.SecuritySchemeBasic("HTTP Basic auth"))
+	spec.AddSecurityScheme("oauth2", nooa.SecuritySchemeOAuth2("oauth2", "OAuth2 authorization code flow", nooa.OAuth2Config{
+		Flow:     nooa.OAuth2FlowAuthorizationCode,
+		AuthURL:  "https://example.com/oauth/authorize",
+		TokenURL: "https://example.com/oauth/token",
+		Scopes: []nooa.OAuth2Scope{
+			{Name: "read", Description: "Read access"},
+			{Name: "write", Description: "Write access"},
+		},
+	}))
+	spec.DefaultSecurity(nooa.SecurityRequirement{Scheme: "bearerAuth", Scopes: []string{"read", "write"}})
+
 	// POST /mega — полный пример со всеми фичами (body + валидация)
 	nooa.NewRoute[mixed.MegaStruct, mixed.MegaStruct](
 		"POST", "/mega", handleCreateMegaStruct).

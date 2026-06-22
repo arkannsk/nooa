@@ -61,6 +61,8 @@ func main() {
 	spec.AddError(http.StatusTooManyRequests, new(models.RateLimitError), "Rate limit exceeded")
 	spec.AddError(http.StatusInternalServerError, new(models.APIError), "Internal server error")
 
+	spec.AddTag("BasicTypes", "Примитивные типы Go и их отображение в OpenAPI")
+
 	// POST /primitives — примитивные типы
 	nooa.NewRoute[basic_types.SimplePrimitives, basic_types.SimplePrimitives](
 		"POST", "/primitives", createPrimitives).

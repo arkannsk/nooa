@@ -41,6 +41,8 @@ func main() {
 		Description: "Integration example: generic types (Option, Result, custom generics)",
 	})
 
+	spec.AddTag("Generics", "Generic-типы: Option, Result и пользовательские дженерики")
+
 	nooa.NewRoute[gen.GenericStruct, gen.GenericStruct](
 		"GET", "/generic", handleGenericStruct).
 		Summary("Get generic struct").

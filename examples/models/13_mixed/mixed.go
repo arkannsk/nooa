@@ -32,7 +32,7 @@ type MegaStruct struct {
 	Thumbnail []byte `json:"thumbnail"`
 
 	// === Коллекции ===
-	// @oa:enum "active","inactive"
+	// @oa:enum active,inactive
 	// @evl:validate required
 	Status string `json:"status"`
 

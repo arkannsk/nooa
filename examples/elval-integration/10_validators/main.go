@@ -86,6 +86,8 @@ func main() {
 	spec.AddError(http.StatusBadRequest, new(models.ValidationError), "Validation failed")
 	spec.AddError(http.StatusInternalServerError, new(models.APIError), "Internal server error")
 
+	spec.AddTag("Validators", "Валидация через @evl:validate: строки, числа, enum, слайсы, даты")
+
 	nooa.NewRoute[val.AllStringValidators, val.AllStringValidators](
 		"POST", "/validate/string", handleStringValidators).
 		Summary("Validate string fields").
