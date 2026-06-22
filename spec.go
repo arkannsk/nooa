@@ -18,24 +18,28 @@ type errorSchema struct {
 
 // Spec — изолированный генератор OpenAPI спецификации для одной версии/группы.
 type Spec struct {
-	routes       []RouteSpec
-	schemas      map[string]*oa.Schema
-	errors       map[int]*errorSchema
-	tags         map[string]string // name -> description
-	info         Info
-	transformers []SpecTransformer
-	mu           sync.RWMutex
-	specJSON     []byte
-	generated    bool
+	routes          []RouteSpec
+	schemas         map[string]*oa.Schema
+	errors          map[int]*errorSchema
+	tags            map[string]string // name -> description
+	securitySchemes []SecurityScheme
+	defaultSecurity []SecurityRequirement
+	info            Info
+	transformers    []SpecTransformer
+	mu              sync.RWMutex
+	specJSON        []byte
+	generated       bool
 }
 
 // NewSpec создает новый изолированный генератор спецификации.
 func NewSpec(info Info) *Spec {
 	return &Spec{
-		schemas: make(map[string]*oa.Schema),
-		errors:  make(map[int]*errorSchema),
-		tags:    make(map[string]string),
-		info:    info,
+		schemas:         make(map[string]*oa.Schema),
+		errors:          make(map[int]*errorSchema),
+		tags:            make(map[string]string),
+		securitySchemes: nil,
+		defaultSecurity: nil,
+		info:            info,
 	}
 }
 
@@ -66,7 +70,7 @@ func (s *Spec) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // generate строит JSON один раз при первом запросе (thread-safe).
 func (s *Spec) generate() []byte {
 	if !s.generated {
-		specMap := buildSpecFromData(s.info, s.routes, s.schemas, s.errors, s.tags)
+		specMap := buildSpecFromData(s.info, s.routes, s.schemas, s.errors, s.tags, s.securitySchemes, s.defaultSecurity)
 		for _, t := range s.transformers {
 			specMap = t(specMap)
 		}
@@ -154,4 +158,43 @@ func (s *Spec) GetTags() map[string]string {
 		copy[k] = v
 	}
 	return copy
+}
+
+// AddSecurityScheme регистрирует схему безопасности в components/securitySchemes.
+// Схема становится доступна для использования в Route.Secure().
+//
+// Примеры:
+//
+//	// Bearer token (JWT)
+//	spec.AddSecurityScheme("bearerAuth", nooa.SecuritySchemeBearer("JWT authorization"))
+//
+//	// API key в заголовке
+//	spec.AddSecurityScheme("apiKey", nooa.SecuritySchemeAPIKey("X-API-Key", "header", "API key"))
+//
+//	// Basic auth
+//	spec.AddSecurityScheme("basicAuth", nooa.SecuritySchemeBasic("HTTP Basic auth"))
+func (s *Spec) AddSecurityScheme(name string, scheme SecurityScheme) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	// Если имя не задано, используем нормализованное имя из схемы
+	if name == "" {
+		name = scheme.Name
+	}
+	scheme.Name = name
+	s.securitySchemes = append(s.securitySchemes, scheme)
+	s.generated = false
+}
+
+// DefaultSecurity задаёт глобальные требования безопасности для всех операций.
+// Если маршрут не указывает своё Security через Route.Secure(), используется этот блок.
+// Для отмены глобального security на конкретном маршруте — передайте пустой список.
+//
+// Пример:
+//
+//	spec.DefaultSecurity(noa.SecurityRequirement{Scheme: "bearerAuth", Scopes: []string{"read", "write"}})
+func (s *Spec) DefaultSecurity(reqs ...SecurityRequirement) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.defaultSecurity = append([]SecurityRequirement(nil), reqs...)
+	s.generated = false
 }

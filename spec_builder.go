@@ -21,7 +21,7 @@ type Info struct {
 type SpecTransformer func(spec map[string]any) map[string]any
 
 // buildSpecFromData собирает spec из переданных данных (без глобальных переменных)
-func buildSpecFromData(info Info, routes []RouteSpec, schemas map[string]*oa.Schema, errorSchemas map[int]*errorSchema, explicitTags map[string]string) map[string]any {
+func buildSpecFromData(info Info, routes []RouteSpec, schemas map[string]*oa.Schema, errorSchemas map[int]*errorSchema, explicitTags map[string]string, securitySchemes []SecurityScheme, defaultSecurity []SecurityRequirement) map[string]any {
 	refRemap := generateRefRemap(schemas)
 	normalizedSchemas := normalizeAllSchemas(schemas, refRemap)
 	tags := collectTags(routes, explicitTags)
@@ -35,7 +35,7 @@ func buildSpecFromData(info Info, routes []RouteSpec, schemas map[string]*oa.Sch
 		pathItem[strings.ToLower(r.Method)] = op
 	}
 
-	return map[string]any{
+	spec := map[string]any{
 		"openapi": "3.0.3",
 		"info":    info,
 		"servers": []map[string]any{{"url": ".", "description": "Local server"}},
@@ -45,6 +45,10 @@ func buildSpecFromData(info Info, routes []RouteSpec, schemas map[string]*oa.Sch
 		},
 		"tags": tags,
 	}
+
+	buildSpecSecuritySection(spec, securitySchemes, defaultSecurity, routes)
+
+	return spec
 }
 
 // resolveRef remaps a $ref value through refRemap and returns an isolated object.
@@ -406,9 +410,15 @@ func buildOperationSecurity(op map[string]any, secReqs []SecurityRequirement) {
 	if len(secReqs) == 0 {
 		return
 	}
-	secList := make([]map[string][]string, 0, len(secReqs))
+	secList := make([]any, 0, len(secReqs))
 	for _, s := range secReqs {
-		secList = append(secList, map[string][]string{s.Scheme: s.Scopes})
+		entry := map[string]any{}
+		if len(s.Scopes) > 0 {
+			entry[s.Scheme] = s.Scopes
+		} else {
+			entry[s.Scheme] = []string{}
+		}
+		secList = append(secList, entry)
 	}
 	op["security"] = secList
 }

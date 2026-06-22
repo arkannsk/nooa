@@ -103,6 +103,9 @@ func main() {
 
 	spec.AddTag("Parameters", "HTTP-параметры: query, path, header через @oa:in")
 
+	spec.AddSecurityScheme("apiKey", nooa.SecuritySchemeAPIKey("X-API-Key", nooa.SecurityInHeader, "API key authentication"))
+	spec.DefaultSecurity(nooa.SecurityRequirement{Scheme: "apiKey"})
+
 	nooa.NewRoute[httpparams.QueryParams, httpparams.QueryParams](
 		"GET", "/search", handleQueryParams).
 		Summary("Search with query parameters").
