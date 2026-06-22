@@ -121,6 +121,28 @@ func inferTypeFromConstraints(raw map[string]any) {
 		raw["type"] = "object"
 		return
 	}
+	// If we have additionalProperties, it's a map (object)
+	if raw["additionalProperties"] != nil {
+		raw["type"] = "object"
+		return
+	}
+	// Infer from enum values
+	if enumVal, ok := raw["enum"]; ok {
+		if enumSlice, ok := enumVal.([]any); ok && len(enumSlice) > 0 {
+			switch enumSlice[0].(type) {
+			case string:
+				raw["type"] = "string"
+			case float64:
+				raw["type"] = "number"
+			case bool:
+				raw["type"] = "boolean"
+			}
+			return
+		}
+	}
+	// Fallback: empty schema (no type, no constraints) — default to object
+	// This covers elval-gen cases like **T or *[]T where type is lost
+	raw["type"] = "object"
 }
 
 // coerceNumericExample converts a string example to int/float when the schema type requires it.
