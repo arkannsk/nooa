@@ -11,7 +11,7 @@ spec := nooa.NewSpec(nooa.Info{
 nooa.NewRoute[UserReq, UserRes]("POST", "/users", handleCreateUser).
     Summary("Create a user").
     Tags("Users").
-    OnSuccess(201, "User created").
+    PossibleErr(http.StatusBadRequest).
     RegisterSpecAndMux(mux, spec)
 
 nooa.RegisterVersionedAPI("", spec, mux)
@@ -79,13 +79,12 @@ nooa.NewRoute[CreateUserRequest, User]("POST", "/users", handleCreateUser).
     Summary("Create a new user").
     Description("Creates a user and returns the created resource").
     Tags("Users").
-    OnSuccess(201, "User created").
+    PossibleErr(http.StatusBadRequest).
     RegisterSpecAndMux(mux, spec)
 
 nooa.NewRoute[struct{}, User]("GET", "/users/{id}", handleGetUser).
     Summary("Get user by ID").
     Tags("Users").
-    OnSuccess(200, "User found").
     RegisterSpecAndMux(mux, spec)
 ```
 
@@ -130,8 +129,10 @@ spec := nooa.NewSpec(nooa.Info{
 | `AddError(status, model, description)` | Register a global error schema    |
 | `AddSecurityScheme(name, scheme)`      | Register a security scheme        |
 | `DefaultSecurity(reqs...)`             | Set global security requirements  |
+| `Use(middlewares...)`                  | Add middleware for all routes registered via `RegisterMux` |
 | `SetTransformers(fns...)`              | Add spec transformers             |
 | `ServeHTTP(w, r)`                      | Serve the generated OpenAPI JSON  |
+| `RegisterMux(mux, r)`                  | Register a `RouteSpec` in mux with spec middleware applied |
 
 ### Routes
 
@@ -145,10 +146,9 @@ nooa.NewRoute[RequestType, ResponseType](method, path, handler).
     OperationID("customId").
     Secure("bearerAuth", "read", "write").
     OnSuccess(200, "OK").
-    OnClientErr(400, "Bad request").
-    OnServerErr(500, "Internal error").
     OnNoContent(204, "Deleted").
     PossibleErr(http.StatusBadRequest, http.StatusNotFound).
+    Use(middleware1, middleware2).
     Prefix("/api/v1").
     RegisterSpecAndMux(mux, spec)
 ```
@@ -164,16 +164,15 @@ nooa.NewRoute[RequestType, ResponseType](method, path, handler).
 | `RequestContentType(cts...)`       | Override request content types     |
 | `RequestBodySchema(name)`          | Override request body schema name  |
 | `ResponseSchema(status, name)`     | Bind a schema to a status code     |
-| `OnSuccess(status, desc, ct...)`   | Success response                   |
-| `OnClientErr(status, desc, ct...)` | 4xx error response                 |
-| `OnServerErr(status, desc, ct...)` | 5xx error response                 |
-| `OnNoContent(status, desc)`        | 204-like no-body response          |
-| `PossibleErr(statuses...)`         | Reference global error schemas     |
-| `Prefix(p)`                        | Add path prefix (e.g. `/api/v1`)   |
-| `Extension(key, value)`            | Add vendor extension (`x-...`)     |
-| `Register(mux)`                    | Register handler in mux (no spec)  |
-| `RegisterSpec(spec)`               | Register in spec only (no handler) |
-| `RegisterSpecAndMux(mux, spec)`    | Register both                      |
+| `OnSuccess(status, desc, ct...)`   | Success response (description override) |
+| `OnNoContent(status, desc)`        | 204-like no-body response               |
+| `PossibleErr(statuses...)`         | Reference global error schemas          |
+| `Use(middlewares...)`              | Add per-route middleware                |
+| `Prefix(p)`                        | Add path prefix (e.g. `/api/v1`)        |
+| `Extension(key, value)`            | Add vendor extension (`x-...`)          |
+| `Register(mux)`                    | Register handler in mux (no spec)       |
+| `RegisterSpec(spec)`               | Register in spec only (no handler)      |
+| `RegisterSpecAndMux(mux, spec)`    | Register both                           |
 
 ### Tags
 
@@ -207,6 +206,28 @@ nooa.NewRoute[Req, Res]("GET", "/users/{id}", handler).
 ```
 
 The error model is automatically registered in `components/schemas`.
+
+### Middleware
+
+Add per-route middleware with `.Use()`:
+
+```go
+nooa.NewRoute[Req, Res]("GET", "/admin", handler).
+    Use(authMiddleware, rateLimit).
+    Register(mux)
+```
+
+Add middleware to all routes in a spec group with `spec.Use()`:
+
+```go
+spec.Use(loggingMiddleware, corsMiddleware)
+
+nooa.NewRoute[Req, Res]("GET", "/users", handler).
+    Use(rateLimit).                    // route middleware (closest to handler)
+    RegisterSpecAndMux(mux, spec)      // spec middleware applied as outermost
+```
+
+Execution order: `spec middleware → route middleware → handler`.
 
 ### Security
 

@@ -47,6 +47,7 @@ type RouteSpec struct {
 	RequestContentType    []string
 	Responses             []ResponseSpec
 	Handler               http.HandlerFunc
+	Middlewares           []func(http.HandlerFunc) http.HandlerFunc
 	Extensions            map[string]any
 	RequestBodySchemaName string
 	ResponseSchemaNames   map[int]string       // [Status Code] -> Schema Name
@@ -345,6 +346,7 @@ func (b *RouteBuilder[Req, Res]) Spec() RouteSpec {
 		RequestContentType:    append([]string(nil), b.requestContentType...),
 		Responses:             append([]ResponseSpec(nil), b.responses...),
 		Handler:               b.handler,
+		Middlewares:           append([]func(http.HandlerFunc) http.HandlerFunc(nil), b.middlewares...),
 		RequestBodySchemaName: b.requestBodySchemaName,
 		ResponseSchemaNames:   copyMap(b.responseSchemaNames),
 		ErrorStatuses:         append([]int(nil), b.errorStatuses...),
@@ -404,10 +406,18 @@ func (b *RouteBuilder[Req, Res]) RegisterSpec(spec *Spec) *RouteBuilder[Req, Res
 }
 
 // RegisterSpecAndMux привязывает к Spec И регистрирует хендлер в mux.
+// Если Spec задан, middleware из Spec применяются как самые внешние.
 func (b *RouteBuilder[Req, Res]) RegisterSpecAndMux(mux *http.ServeMux, spec *Spec) *RouteBuilder[Req, Res] {
-	b.Register(mux)
 	if spec != nil {
-		b.RegisterSpec(spec)
+		spec.RegisterModel(getSchemaName[Req](), new(Req))
+		resName := getSchemaName[Res]()
+		reqName := getSchemaName[Req]()
+		if reqName != resName {
+			spec.RegisterModel(resName, new(Res))
+		}
+		spec.RegisterMux(mux, b.Spec())
+	} else {
+		b.Register(mux)
 	}
 	return b
 }

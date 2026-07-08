@@ -26,6 +26,7 @@ type Spec struct {
 	defaultSecurity []SecurityRequirement
 	info            Info
 	transformers    []SpecTransformer
+	middlewares     []func(http.HandlerFunc) http.HandlerFunc
 	mu              sync.RWMutex
 	specJSON        []byte
 	generated       bool
@@ -197,4 +198,34 @@ func (s *Spec) DefaultSecurity(reqs ...SecurityRequirement) {
 	defer s.mu.Unlock()
 	s.defaultSecurity = append([]SecurityRequirement(nil), reqs...)
 	s.generated = false
+}
+
+// Use добавляет middleware, применяемый ко всем роутам, зарегистрированным
+// через RegisterMux. Middleware от Spec применяются первыми (самые внешние),
+// затем — middleware с самого роута.
+func (s *Spec) Use(middlewares ...func(http.HandlerFunc) http.HandlerFunc) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.middlewares = append(s.middlewares, middlewares...)
+}
+
+// RegisterMux добавляет роут в Spec и регистрирует хендлер в mux.
+// Сначала оборачиваются middleware роута (ближайшие к handler),
+// затем — middleware из Spec (самые внешние).
+func (s *Spec) RegisterMux(mux *http.ServeMux, r RouteSpec) {
+	s.AddRoute(r)
+
+	handled := r.Handler
+	// Сначала middleware роута (ближайшие к handler)
+	for i := len(r.Middlewares) - 1; i >= 0; i-- {
+		handled = r.Middlewares[i](handled)
+	}
+	// Затем middleware из Spec (самые внешние)
+	s.mu.RLock()
+	for i := len(s.middlewares) - 1; i >= 0; i-- {
+		handled = s.middlewares[i](handled)
+	}
+	s.mu.RUnlock()
+
+	mux.HandleFunc(r.Method+" "+r.Path, handled)
 }
