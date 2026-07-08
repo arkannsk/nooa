@@ -21,6 +21,7 @@ type JsonTagModel struct {
 
 // YamlTagModel — проверка тегов yaml (приоритет json > yaml)
 // @oa:description "Struct with yaml tags"
+// @oa:response 200 application/json
 type YamlTagModel struct {
 	// @oa:description "Only yaml tag (no json)"
 	UserName string `yaml:"user_name"`
@@ -31,6 +32,7 @@ type YamlTagModel struct {
 
 // XmlTagModel — проверка тегов xml (приоритет json > yaml > xml)
 // @oa:description "Struct with xml tags"
+// @oa:response 200 application/json
 type XmlTagModel struct {
 	// @oa:description "Only xml tag (no json, no yaml)"
 	RecordID string `xml:"record_id"`

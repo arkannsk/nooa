@@ -3,7 +3,7 @@ module github.com/arkannsk/nooa
 go 1.26.1
 
 require (
-	github.com/arkannsk/elval v0.0.0-20260708170038-82fc623547fc
+	github.com/arkannsk/elval v0.0.0-20260708182343-dc41ccd9be17
 	github.com/paulmach/orb v0.13.0
 	github.com/stretchr/testify v1.11.1
 )

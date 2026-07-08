@@ -22,7 +22,7 @@ type SpecTransformer func(spec map[string]any) map[string]any
 
 // buildSpecFromData собирает spec из переданных данных (без глобальных переменных)
 func buildSpecFromData(info Info, routes []RouteSpec, schemas map[string]*oa.Schema, errorSchemas map[int]*errorSchema, explicitTags map[string]string, securitySchemes []SecurityScheme, defaultSecurity []SecurityRequirement) map[string]any {
-	refRemap := generateRefRemap(schemas)
+	refRemap := generateRefRemap(schemas, routes)
 	normalizedSchemas := normalizeAllSchemas(schemas, refRemap)
 	tags := collectTags(routes, explicitTags)
 
@@ -285,6 +285,30 @@ func collectRefsFromSchema(schema *oa.Schema, refs map[string]bool) {
 	}
 }
 
+// collectRefsFromResponses собирает $ref из ответов моделей.
+func collectRefsFromResponses(responses map[int]*oa.Response, refs map[string]bool) {
+	for _, resp := range responses {
+		for _, mt := range resp.Content {
+			if mt.Schema != nil && mt.Schema.Ref != "" {
+				ref := mt.Schema.Ref
+				if !strings.HasPrefix(ref, "#/") {
+					ref = "#/components/schemas/" + ref
+				}
+				refs[ref] = true
+			}
+		}
+		for _, header := range resp.Headers {
+			if header.Schema != nil && header.Schema.Ref != "" {
+				ref := header.Schema.Ref
+				if !strings.HasPrefix(ref, "#/") {
+					ref = "#/components/schemas/" + ref
+				}
+				refs[ref] = true
+			}
+		}
+	}
+}
+
 // shortNameFromRef извлекает короткое имя из полного $ref.
 // github.com/arkannsk/nooa/examples/models/03_nested.Address -> 03_nested.Address
 func shortNameFromRef(ref string) string {
@@ -304,13 +328,19 @@ func shortNameFromRef(ref string) string {
 
 // generateRefRemap строит мапу для замены полных $ref на короткие имена.
 // Проходит по всем схемам, собирает $ref из properties/items и сопоставляет их с ключами.
-func generateRefRemap(schemas map[string]*oa.Schema) map[string]string {
+// Также собирает $ref из ModelResponses маршрутов.
+func generateRefRemap(schemas map[string]*oa.Schema, routes []RouteSpec) map[string]string {
 	remap := make(map[string]string)
 
 	// Собираем все $ref из свойств схем
 	allRefs := make(map[string]bool)
 	for _, schema := range schemas {
 		collectRefsFromSchema(schema, allRefs)
+	}
+
+	// Собираем $ref из ModelResponses маршрутов
+	for _, r := range routes {
+		collectRefsFromResponses(r.ModelResponses, allRefs)
 	}
 
 	// Для каждого $ref находим подходящий ключ
@@ -552,7 +582,8 @@ func buildResponses(r RouteSpec, errorSchemas map[int]*errorSchema, schemas map[
 	}
 
 	// Затем добавляем явно заданные ответы (OnSuccess, OnClientErr и т.д.)
-	// Они переопределяют ответы из моделей для тех же статусных кодов
+	// Если для того же status code уже есть ответ из модели — сливаем media types.
+	// Явный description переопределяет description из модели.
 	for _, resp := range r.Responses {
 		code := strconv.Itoa(resp.Status)
 		schemaName, hasSchema := r.ResponseSchemaNames[resp.Status]
@@ -570,7 +601,19 @@ func buildResponses(r RouteSpec, errorSchemas map[int]*errorSchema, schemas map[
 
 		desc := buildResponseDescription(resp, errorSchemas)
 
-		if len(content) > 0 {
+		// Если для этого status code уже есть ответ из модели — сливаем content
+		if existing, ok := resps[code].(map[string]any); ok {
+			// description из явного ответа приоритетнее
+			resps[code].(map[string]any)["description"] = desc
+			// сливаем content: media types из явного ответа добавляются/переопределяются
+			if existingContent, ok := existing["content"].(map[string]any); ok {
+				for mt, val := range content {
+					existingContent[mt] = val
+				}
+			} else if len(content) > 0 {
+				resps[code].(map[string]any)["content"] = content
+			}
+		} else if len(content) > 0 {
 			resps[code] = map[string]any{
 				"description": desc,
 				"content":     content,

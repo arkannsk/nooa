@@ -92,6 +92,17 @@ func (v *YamlTagModel) OaSchema() *oa.Schema {
 func (v *YamlTagModel) GlobalRef() string {
 	return "github.com/arkannsk/nooa/examples/models/14_struct_tags.YamlTagModel"
 }
+func (v *YamlTagModel) OaResponses() map[int]*oa.Response {
+	responses := make(map[int]*oa.Response)
+	responses[200] = &oa.Response{
+		Description: v.GlobalRef(),
+		Content: map[string]*oa.MediaType{
+			"application/json": {Schema: &oa.Schema{Ref: "#/components/schemas/" + v.GlobalRef()}},
+			"text/yaml":        {Schema: &oa.Schema{Ref: "#/components/schemas/" + v.GlobalRef()}},
+		},
+	}
+	return responses
+}
 
 func (v *XmlTagModel) OaSchema() *oa.Schema {
 	schema := &oa.Schema{
@@ -125,6 +136,18 @@ func (v *XmlTagModel) OaSchema() *oa.Schema {
 
 func (v *XmlTagModel) GlobalRef() string {
 	return "github.com/arkannsk/nooa/examples/models/14_struct_tags.XmlTagModel"
+}
+func (v *XmlTagModel) OaResponses() map[int]*oa.Response {
+	responses := make(map[int]*oa.Response)
+	responses[200] = &oa.Response{
+		Description: v.GlobalRef(),
+		Content: map[string]*oa.MediaType{
+			"application/json": {Schema: &oa.Schema{Ref: "#/components/schemas/" + v.GlobalRef()}},
+			"application/xml":  {Schema: &oa.Schema{Ref: "#/components/schemas/" + v.GlobalRef()}},
+			"text/yaml":        {Schema: &oa.Schema{Ref: "#/components/schemas/" + v.GlobalRef()}},
+		},
+	}
+	return responses
 }
 
 func (v *MixedTagsModel) OaSchema() *oa.Schema {
