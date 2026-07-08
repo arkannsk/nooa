@@ -107,9 +107,16 @@ func NewRoute[Req, Res any](method, path string, handler http.HandlerFunc) *Rout
 	if method != "GET" && method != "HEAD" && method != "DELETE" {
 		b.requestBodySchemaName = reqSchemaName
 	}
-	// Автоматически привязываем основной ответ к 200/201
-	b.responseSchemaNames[200] = resSchemaName
-	b.responseSchemaNames[201] = resSchemaName
+	// Привязываем схему ответа к статус-кодам, объявленным в модели через @oa:response.
+	// Если модель не объявила статусы — дефолт 200.
+	b.responseSchemaNames = make(map[int]string)
+	if len(b.modelResponses) > 0 {
+		for status := range b.modelResponses {
+			b.responseSchemaNames[status] = resSchemaName
+		}
+	} else {
+		b.responseSchemaNames[200] = resSchemaName
+	}
 
 	return b
 }
