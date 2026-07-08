@@ -401,7 +401,7 @@ func buildOperation(r RouteSpec, refRemap map[string]string, schemas map[string]
 	buildOperationExtensions(op, r.Extensions)
 	buildOperationParameters(op, r, refRemap, pathParamRegex)
 	buildOperationRequestBody(op, r, schemas)
-	op["responses"] = buildResponses(r, errorSchemas, schemas)
+	op["responses"] = buildResponses(r, errorSchemas, schemas, refRemap)
 
 	return op
 }
@@ -541,9 +541,18 @@ func buildOperationRequestBody(op map[string]any, r RouteSpec, schemas map[strin
 	}
 }
 
-func buildResponses(r RouteSpec, errorSchemas map[int]*errorSchema, schemas map[string]*oa.Schema) map[string]any {
+func buildResponses(r RouteSpec, errorSchemas map[int]*errorSchema, schemas map[string]*oa.Schema, refRemap map[string]string) map[string]any {
 	resps := make(map[string]any)
 
+	// Сначала добавляем ответы из моделей (OaResponses)
+	for code, resp := range r.ModelResponses {
+		codeStr := strconv.Itoa(code)
+		respMap := buildResponseFromModel(resp, refRemap)
+		resps[codeStr] = respMap
+	}
+
+	// Затем добавляем явно заданные ответы (OnSuccess, OnClientErr и т.д.)
+	// Они переопределяют ответы из моделей для тех же статусных кодов
 	for _, resp := range r.Responses {
 		code := strconv.Itoa(resp.Status)
 		schemaName, hasSchema := r.ResponseSchemaNames[resp.Status]
@@ -572,6 +581,50 @@ func buildResponses(r RouteSpec, errorSchemas map[int]*errorSchema, schemas map[
 	}
 
 	return resps
+}
+
+// buildResponseFromModel преобразует *oa.Response из OaResponses() в map[string]any для OpenAPI spec.
+func buildResponseFromModel(resp *oa.Response, refRemap map[string]string) map[string]any {
+	respMap := map[string]any{}
+	if resp.Description != "" {
+		respMap["description"] = resp.Description
+	}
+
+	if len(resp.Content) > 0 {
+		content := make(map[string]any)
+		for mediaType, mt := range resp.Content {
+			if mt.Schema != nil {
+				schemaObj := normalizeSchema(mt.Schema, refRemap)
+				if schemaObj != nil {
+					content[mediaType] = map[string]any{"schema": schemaObj}
+				}
+			}
+		}
+		if len(content) > 0 {
+			respMap["content"] = content
+		}
+	}
+
+	if len(resp.Headers) > 0 {
+		headers := make(map[string]any)
+		for name, header := range resp.Headers {
+			headerMap := map[string]any{
+				"name":  header.Name,
+				"in":    string(header.In),
+				"schema": normalizeSchema(header.Schema, refRemap),
+			}
+			if header.Description != "" {
+				headerMap["description"] = header.Description
+			}
+			if header.Required {
+				headerMap["required"] = true
+			}
+			headers[name] = headerMap
+		}
+		respMap["headers"] = headers
+	}
+
+	return respMap
 }
 
 // buildResponseSchemaObject определяет schema object для response.

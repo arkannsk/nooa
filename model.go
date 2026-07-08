@@ -21,6 +21,11 @@ type paramsProvider interface {
 	OaParams() []*oa.Parameter
 }
 
+// responsesProvider — интерфейс, реализуемый типами с @oa:response аннотациями.
+type responsesProvider interface {
+	OaResponses() map[int]*oa.Response
+}
+
 // RegisterModel регистрирует модель в глобальном реестре схем.
 // Эта функция используется в NewRoute для автоматической регистрации request/response моделей.
 func RegisterModel(name string, instance any) {

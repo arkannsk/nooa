@@ -1,6 +1,7 @@
 package nooa
 
 import (
+	"maps"
 	"net/http"
 	"path"
 	"reflect"
@@ -48,9 +49,10 @@ type RouteSpec struct {
 	Handler               http.HandlerFunc
 	Extensions            map[string]any
 	RequestBodySchemaName string
-	ResponseSchemaNames   map[int]string  // [Status Code] -> Schema Name
-	ErrorStatuses         []int           // статусы, для которых подтягиваются глобальные схемы ошибок из Spec
-	Parameters            []*oa.Parameter // OpenAPI параметры из OaParams() моделей
+	ResponseSchemaNames   map[int]string       // [Status Code] -> Schema Name
+	ErrorStatuses         []int                // статусы, для которых подтягиваются глобальные схемы ошибок из Spec
+	Parameters            []*oa.Parameter      // OpenAPI параметры из OaParams() моделей
+	ModelResponses        map[int]*oa.Response // OpenAPI ответы из OaResponses() моделей
 }
 
 type RouteBuilder[Req, Res any] struct {
@@ -71,6 +73,7 @@ type RouteBuilder[Req, Res any] struct {
 	responseSchemaNames   map[int]string
 	errorStatuses         []int
 	parameters            []*oa.Parameter
+	modelResponses        map[int]*oa.Response
 }
 
 func NewRoute[Req, Res any](method, path string, handler http.HandlerFunc) *RouteBuilder[Req, Res] {
@@ -93,6 +96,11 @@ func NewRoute[Req, Res any](method, path string, handler http.HandlerFunc) *Rout
 	// Собираем параметры из OaParams() если модели поддерживают
 	collectParams(reqInstance, &b.parameters)
 	collectParams(resInstance, &b.parameters)
+
+	// Собираем ответы из OaResponses() если модели поддерживают
+	b.modelResponses = make(map[int]*oa.Response)
+	collectResponses(reqInstance, b.modelResponses)
+	collectResponses(resInstance, b.modelResponses)
 
 	if method != "GET" && method != "HEAD" && method != "DELETE" {
 		b.RequestBodySchema(reqSchemaName)
@@ -151,6 +159,17 @@ func collectParams(instance any, destination *[]*oa.Parameter) {
 	}
 }
 
+// collectResponses извлекает ответы из инстанса если он реализует responsesProvider.
+// Ответы добавляются к destination; при конфликте статусного кода приоритет у новых данных.
+func collectResponses(instance any, destination map[int]*oa.Response) {
+	rp, ok := any(instance).(responsesProvider)
+	if !ok {
+		return
+	}
+
+	maps.Copy(destination, rp.OaResponses())
+}
+
 func (b *RouteBuilder[Req, Res]) syncSpec() {
 	if b.spec == nil {
 		b.spec = &RouteSpec{}
@@ -184,9 +203,15 @@ func (b *RouteBuilder[Req, Res]) syncSpec() {
 
 	if b.responseSchemaNames != nil {
 		b.spec.ResponseSchemaNames = make(map[int]string)
-		for k, v := range b.responseSchemaNames {
-			b.spec.ResponseSchemaNames[k] = v
+		maps.Copy(b.spec.ResponseSchemaNames, b.responseSchemaNames)
+	}
+
+	// Копирование modelResponses
+	if len(b.modelResponses) > 0 {
+		if b.spec.ModelResponses == nil {
+			b.spec.ModelResponses = make(map[int]*oa.Response)
 		}
+		maps.Copy(b.spec.ModelResponses, b.modelResponses)
 	}
 }
 
@@ -357,9 +382,11 @@ func (b *RouteBuilder[Req, Res]) Spec() RouteSpec {
 	spec.Responses = append([]ResponseSpec(nil), b.spec.Responses...)
 	if b.spec.Extensions != nil {
 		spec.Extensions = make(map[string]any)
-		for k, v := range b.spec.Extensions {
-			spec.Extensions[k] = v
-		}
+		maps.Copy(spec.Extensions, b.spec.Extensions)
+	}
+	if b.spec.ModelResponses != nil {
+		spec.ModelResponses = make(map[int]*oa.Response)
+		maps.Copy(spec.ModelResponses, b.spec.ModelResponses)
 	}
 	return spec
 }
