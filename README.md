@@ -164,6 +164,7 @@ nooa.NewRoute[RequestType, ResponseType](method, path, handler).
 | `RequestContentType(cts...)`     | Override request content types          |
 | `RequestBodySchema(name)`        | Override request body schema name       |
 | `ResponseSchema(status, name)`   | Bind a schema to a status code          |
+| `Response(status, schema, desc)` | Arbitrary response with custom schema   |
 | `OnSuccess(status, desc, ct...)` | Success response (description override) |
 | `OnNoContent(status, desc)`      | 204-like no-body response               |
 | `PossibleErr(statuses...)`       | Reference global error schemas          |
@@ -173,6 +174,20 @@ nooa.NewRoute[RequestType, ResponseType](method, path, handler).
 | `Register(mux)`                  | Register handler in mux (no spec)       |
 | `RegisterSpec(spec)`             | Register in spec only (no handler)      |
 | `RegisterSpecAndMux(mux, spec)`  | Register both                           |
+
+### Multiple Response Types
+
+When a route returns different types for different status codes, use `NewRouteMultiResp`:
+
+```go
+nooa.NewRouteMultiResp[Req]("POST", "/jobs", handler,
+    nooa.ResponseEntry{Status: 201, Instance: new(CreatedJob), Desc: "Created"},
+    nooa.ResponseEntry{Status: 202, Instance: new(AcceptedJob), Desc: "Processing"},
+).RegisterSpecAndMux(mux, spec)
+```
+
+Each entry registers its schema automatically and binds it to the given status code.
+The API is identical to `RouteBuilder` (Summary, Tags, Secure, Use, etc.).
 
 ### Tags
 
@@ -362,6 +377,32 @@ type ErrorResponse struct {
 
 If a model has no `@oa:response` annotation, nooa defaults to **200**.
 The response schema is only bound to the status codes declared by the model — no extra status codes are generated.
+
+### Multiple response types per route
+
+When a route returns different types for different status codes, use `.Response()`:
+
+```go
+spec.RegisterModel("AcceptedJob", new(AcceptedJob))
+
+nooa.NewRoute[Req, CreatedUser]("POST", "/jobs", handler).
+    Response(201, "CreatedUser", "Job created").
+    Response(202, "AcceptedJob", "Processing...", nooa.CTJSON).
+    RegisterSpecAndMux(mux, spec)
+```
+
+This generates separate `201` and `202` responses with their own schemas in the OpenAPI spec.
+
+Alternatively, use `NewRouteMultiResp` to declare all response types upfront:
+
+```go
+nooa.NewRouteMultiResp[Req]("POST", "/jobs", handler,
+    nooa.ResponseEntry{Status: 201, Instance: new(CreatedUser), Desc: "Job created"},
+    nooa.ResponseEntry{Status: 202, Instance: new(AcceptedJob), Desc: "Processing"},
+).RegisterSpecAndMux(mux, spec)
+```
+
+Each entry automatically registers its schema and binds it to the given status code.
 
 ## HTTP Parameters
 

@@ -121,6 +121,8 @@ func NewRoute[Req, Res any](method, path string, handler http.HandlerFunc) *Rout
 	return b
 }
 
+// RouteBuilderMultiResp is defined in route_multi.go.
+
 func defaultOperationID(method, path string) string {
 	method = strings.ToUpper(method)
 	path = strings.Trim(path, "/ ")
@@ -230,6 +232,21 @@ func (b *RouteBuilder[Req, Res]) ResponseSchema(status int, schemaName string) *
 		b.responseSchemaNames = make(map[int]string)
 	}
 	b.responseSchemaNames[status] = schemaName
+	return b
+}
+
+// Response добавляет произвольный ответ для указанного status code.
+// Схема берётся из зарегистрированных моделей (spec.RegisterModel).
+// Полезно когда роут возвращает разные типы для разных статусов:
+//
+//	Response(201, "CreatedUser", "User created").
+//	Response(202, "AcceptedJob", "Processing...", nooa.CTJSON)
+func (b *RouteBuilder[Req, Res]) Response(status int, schemaName string, desc string, ct ...string) *RouteBuilder[Req, Res] {
+	if b.responseSchemaNames == nil {
+		b.responseSchemaNames = make(map[int]string)
+	}
+	b.responseSchemaNames[status] = schemaName
+	b.addResponse(status, desc, ct, false)
 	return b
 }
 
