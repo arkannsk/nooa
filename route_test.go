@@ -24,8 +24,7 @@ func TestNewRoute_TwoTypes(t *testing.T) {
 		Summary("Create user").
 		Tags("users").
 		OnSuccess(201, "Created").
-		OnClientErr(400, "Validation failed").
-		OnServerErr(500, "Internal")
+		PossibleErr(400, 500)
 
 	spec := b.Spec()
 
@@ -94,6 +93,56 @@ func TestRegisterAndGlobalRegistry(t *testing.T) {
 	mux.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200 from mux, got %d", rec.Code)
+	}
+}
+
+func TestMiddlewareChaining(t *testing.T) {
+	var order []string
+
+	mw1 := func(next http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			order = append(order, "mw1")
+			next(w, r)
+		}
+	}
+	mw2 := func(next http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			order = append(order, "mw2")
+			next(w, r)
+		}
+	}
+	mw3 := func(next http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			order = append(order, "mw3")
+			next(w, r)
+		}
+	}
+
+	ClearRegistry()
+	defer ClearRegistry()
+
+	mux := http.NewServeMux()
+
+	NewRoute[Req, Res]("GET", "/mw", handlerOK).
+		Use(mw1, mw2).
+		Use(mw3).
+		Register(mux)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/mw", nil)
+	mux.ServeHTTP(rec, req)
+
+	// mw1 и mw2 добавлены первыми — они самые внешние.
+	// mw3 добавлен последним — он ближайший к handler.
+	// Порядок вызова: mw1 -> mw2 -> mw3 -> handler
+	want := []string{"mw1", "mw2", "mw3"}
+	if len(order) != len(want) {
+		t.Fatalf("expected %d middleware calls, got %d: %v", len(want), len(order), order)
+	}
+	for i, w := range want {
+		if order[i] != w {
+			t.Errorf("order[%d] = %q, want %q", i, order[i], w)
+		}
 	}
 }
 

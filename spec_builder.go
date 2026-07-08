@@ -581,49 +581,75 @@ func buildResponses(r RouteSpec, errorSchemas map[int]*errorSchema, schemas map[
 		resps[codeStr] = respMap
 	}
 
-	// Затем добавляем явно заданные ответы (OnSuccess, OnClientErr и т.д.)
+	// Затем добавляем явно заданные ответы (из Responses билдера).
 	// Если для того же status code уже есть ответ из модели — сливаем media types.
 	// Явный description переопределяет description из модели.
 	for _, resp := range r.Responses {
-		code := strconv.Itoa(resp.Status)
-		schemaName, hasSchema := r.ResponseSchemaNames[resp.Status]
+		addExplicitResponse(resps, resp, r.ResponseSchemaNames, errorSchemas, schemas, refRemap)
+	}
 
-		if resp.Status == 204 || resp.Status == 205 {
-			resps[code] = map[string]any{"description": resp.Description}
+	// Для статусов, записанных в ResponseSchemaNames, но не покрытых ни ModelResponses, ни Responses,
+	// автоматически генерируем ответ с соответствующей схемой.
+	for status, schemaName := range r.ResponseSchemaNames {
+		code := strconv.Itoa(status)
+		if _, exists := resps[code]; exists {
 			continue
 		}
-
-		content := map[string]any{}
-		for _, ct := range resp.ContentTypes {
-			schemaObj := buildResponseSchemaObject(resp, ct, schemaName, hasSchema, errorSchemas, schemas)
-			content[ct] = map[string]any{"schema": schemaObj}
+		if _, exists := schemas[schemaName]; !exists {
+			continue
 		}
-
-		desc := buildResponseDescription(resp, errorSchemas)
-
-		// Если для этого status code уже есть ответ из модели — сливаем content
-		if existing, ok := resps[code].(map[string]any); ok {
-			// description из явного ответа приоритетнее
-			resps[code].(map[string]any)["description"] = desc
-			// сливаем content: media types из явного ответа добавляются/переопределяются
-			if existingContent, ok := existing["content"].(map[string]any); ok {
-				for mt, val := range content {
-					existingContent[mt] = val
-				}
-			} else if len(content) > 0 {
-				resps[code].(map[string]any)["content"] = content
-			}
-		} else if len(content) > 0 {
-			resps[code] = map[string]any{
-				"description": desc,
-				"content":     content,
-			}
-		} else {
-			resps[code] = map[string]any{"description": desc}
+		resps[code] = map[string]any{
+			"description": "Success",
+			"content": map[string]any{
+				CTJSON: map[string]any{
+					"schema": map[string]any{"$ref": "#/components/schemas/" + schemaName},
+				},
+			},
 		}
 	}
 
 	return resps
+}
+
+// addExplicitResponse добавляет явно заданный ответ (из Responses билдера) в resps,
+// сливая content с существующим ответом из модели если он есть.
+func addExplicitResponse(resps map[string]any, resp ResponseSpec, responseSchemaNames map[int]string, errorSchemas map[int]*errorSchema, schemas map[string]*oa.Schema, refRemap map[string]string) {
+	code := strconv.Itoa(resp.Status)
+	schemaName, hasSchema := responseSchemaNames[resp.Status]
+
+	if resp.Status == 204 || resp.Status == 205 {
+		resps[code] = map[string]any{"description": resp.Description}
+		return
+	}
+
+	content := map[string]any{}
+	for _, ct := range resp.ContentTypes {
+		schemaObj := buildResponseSchemaObject(resp, ct, schemaName, hasSchema, errorSchemas, schemas)
+		content[ct] = map[string]any{"schema": schemaObj}
+	}
+
+	desc := buildResponseDescription(resp, errorSchemas)
+
+	// Если для этого status code уже есть ответ из модели — сливаем content
+	if existing, ok := resps[code].(map[string]any); ok {
+		// description из явного ответа приоритетнее
+		resps[code].(map[string]any)["description"] = desc
+		// сливаем content: media types из явного ответа добавляются/переопределяются
+		if existingContent, ok := existing["content"].(map[string]any); ok {
+			for mt, val := range content {
+				existingContent[mt] = val
+			}
+		} else if len(content) > 0 {
+			resps[code].(map[string]any)["content"] = content
+		}
+	} else if len(content) > 0 {
+		resps[code] = map[string]any{
+			"description": desc,
+			"content":     content,
+		}
+	} else {
+		resps[code] = map[string]any{"description": desc}
+	}
 }
 
 // buildResponseFromModel преобразует *oa.Response из OaResponses() в map[string]any для OpenAPI spec.

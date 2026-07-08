@@ -116,7 +116,7 @@ func main() {
 		Summary("Error response").
 		Description("ErrorResponse model defines @oa:response annotation with status 400 and media type application/json.").
 		Tags("Responses").
-		OnClientErr(http.StatusBadRequest, "Bad request").
+		PossibleErr(http.StatusBadRequest).
 		RegisterSpecAndMux(mux, spec)
 
 	// GET /multi — ответ с тремя status code

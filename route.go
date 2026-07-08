@@ -67,7 +67,7 @@ type RouteBuilder[Req, Res any] struct {
 	deprecated            bool
 	handler               http.HandlerFunc
 	responses             []ResponseSpec
-	spec                  *RouteSpec
+	middlewares           []func(http.HandlerFunc) http.HandlerFunc
 	extensions            map[string]any
 	requestBodySchemaName string
 	responseSchemaNames   map[int]string
@@ -78,11 +78,13 @@ type RouteBuilder[Req, Res any] struct {
 
 func NewRoute[Req, Res any](method, path string, handler http.HandlerFunc) *RouteBuilder[Req, Res] {
 	b := &RouteBuilder[Req, Res]{
-		method:             strings.ToUpper(method),
-		path:               path,
-		handler:            handler,
-		operationID:        defaultOperationID(method, path),
-		requestContentType: []string{CTJSON},
+		method:              strings.ToUpper(method),
+		path:                path,
+		handler:             handler,
+		operationID:         defaultOperationID(method, path),
+		requestContentType:  []string{CTJSON},
+		responseSchemaNames: map[int]string{},
+		modelResponses:      make(map[int]*oa.Response),
 	}
 	reqSchemaName := getSchemaName[Req]()
 	resSchemaName := getSchemaName[Res]()
@@ -98,21 +100,16 @@ func NewRoute[Req, Res any](method, path string, handler http.HandlerFunc) *Rout
 	collectParams(resInstance, &b.parameters)
 
 	// Собираем ответы из OaResponses() если модели поддерживают
-	b.modelResponses = make(map[int]*oa.Response)
 	collectResponses(reqInstance, b.modelResponses)
 	collectResponses(resInstance, b.modelResponses)
 
 	if method != "GET" && method != "HEAD" && method != "DELETE" {
-		b.RequestBodySchema(reqSchemaName)
+		b.requestBodySchemaName = reqSchemaName
 	}
 	// Автоматически привязываем основной ответ к 200/201
-	if b.responseSchemaNames == nil {
-		b.responseSchemaNames = make(map[int]string)
-	}
 	b.responseSchemaNames[200] = resSchemaName
 	b.responseSchemaNames[201] = resSchemaName
 
-	b.syncSpec()
 	return b
 }
 
@@ -124,7 +121,7 @@ func defaultOperationID(method, path string) string {
 	}
 	var sb strings.Builder
 	sb.WriteString(method)
-	for _, p := range strings.Split(path, "/") {
+	for p := range strings.SplitSeq(path, "/") {
 		p = strings.Trim(p, "{} ")
 		if p == "" {
 			continue
@@ -170,91 +167,39 @@ func collectResponses(instance any, destination map[int]*oa.Response) {
 	maps.Copy(destination, rp.OaResponses())
 }
 
-func (b *RouteBuilder[Req, Res]) syncSpec() {
-	if b.spec == nil {
-		b.spec = &RouteSpec{}
-		b.spec.ResponseSchemaNames = make(map[int]string)
-	}
-	b.spec.Method = b.method
-	b.spec.Path = b.path
-	b.spec.OperationID = b.operationID
-	b.spec.Summary = b.summary
-	b.spec.Description = b.description
-
-	b.spec.Tags = append([]string(nil), b.tags...)
-	b.spec.Deprecated = b.deprecated
-	b.spec.Security = append([]SecurityRequirement(nil), b.security...)
-	b.spec.RequestContentType = append([]string(nil), b.requestContentType...)
-	b.spec.Responses = append([]ResponseSpec(nil), b.responses...)
-	b.spec.ErrorStatuses = append([]int(nil), b.errorStatuses...)
-	b.spec.Handler = b.handler
-	b.spec.RequestBodySchemaName = b.requestBodySchemaName
-	b.spec.Parameters = append([]*oa.Parameter(nil), b.parameters...)
-
-	// Копирование расширений (исправлено)
-	if len(b.extensions) > 0 {
-		if b.spec.Extensions == nil {
-			b.spec.Extensions = make(map[string]any)
-		}
-		for k, v := range b.extensions {
-			b.spec.Extensions[k] = v
-		}
-	}
-
-	if b.responseSchemaNames != nil {
-		b.spec.ResponseSchemaNames = make(map[int]string)
-		maps.Copy(b.spec.ResponseSchemaNames, b.responseSchemaNames)
-	}
-
-	// Копирование modelResponses
-	if len(b.modelResponses) > 0 {
-		if b.spec.ModelResponses == nil {
-			b.spec.ModelResponses = make(map[int]*oa.Response)
-		}
-		maps.Copy(b.spec.ModelResponses, b.modelResponses)
-	}
-}
-
 func (b *RouteBuilder[Req, Res]) Summary(s string) *RouteBuilder[Req, Res] {
 	b.summary = s
-	b.syncSpec()
 	return b
 }
 
 func (b *RouteBuilder[Req, Res]) Description(s string) *RouteBuilder[Req, Res] {
 	b.description = s
-	b.syncSpec()
 	return b
 }
 
 func (b *RouteBuilder[Req, Res]) Tags(tags ...string) *RouteBuilder[Req, Res] {
 	b.tags = append(b.tags, tags...)
-	b.syncSpec()
 	return b
 }
 
 func (b *RouteBuilder[Req, Res]) OperationID(id string) *RouteBuilder[Req, Res] {
 	b.operationID = id
-	b.syncSpec()
 	return b
 }
 
 func (b *RouteBuilder[Req, Res]) Deprecated() *RouteBuilder[Req, Res] {
 	b.deprecated = true
-	b.syncSpec()
 	return b
 }
 
 func (b *RouteBuilder[Req, Res]) Secure(scheme string, scopes ...string) *RouteBuilder[Req, Res] {
 	b.security = append(b.security, SecurityRequirement{Scheme: scheme, Scopes: scopes})
-	b.syncSpec()
 	return b
 }
 
 func (b *RouteBuilder[Req, Res]) RequestContentType(cts ...string) *RouteBuilder[Req, Res] {
 	if len(cts) > 0 {
 		b.requestContentType = cts
-		b.syncSpec()
 	}
 	return b
 }
@@ -264,14 +209,11 @@ func (b *RouteBuilder[Req, Res]) Extension(key string, value any) *RouteBuilder[
 		b.extensions = make(map[string]any)
 	}
 	b.extensions[key] = value
-	// Обновляем spec, чтобы изменения были видны сразу при вызове Spec()
-	b.syncSpec()
 	return b
 }
 
 func (b *RouteBuilder[Req, Res]) RequestBodySchema(name string) *RouteBuilder[Req, Res] {
 	b.requestBodySchemaName = name
-	b.syncSpec()
 	return b
 }
 
@@ -280,7 +222,14 @@ func (b *RouteBuilder[Req, Res]) ResponseSchema(status int, schemaName string) *
 		b.responseSchemaNames = make(map[int]string)
 	}
 	b.responseSchemaNames[status] = schemaName
-	b.syncSpec()
+	return b
+}
+
+// Use добавляет middleware к роуту. Middleware применяются в порядке добавления
+// (первый добавленный — самый внешний). Поддерживает стандартную сигнатуру
+// func(http.HandlerFunc) http.HandlerFunc.
+func (b *RouteBuilder[Req, Res]) Use(middlewares ...func(http.HandlerFunc) http.HandlerFunc) *RouteBuilder[Req, Res] {
+	b.middlewares = append(b.middlewares, middlewares...)
 	return b
 }
 
@@ -294,46 +243,18 @@ func (b *RouteBuilder[Req, Res]) Prefix(prefix string) *RouteBuilder[Req, Res] {
 	} else if prefix != "" {
 		b.path = prefix
 	}
-	b.syncSpec()
 	return b
 }
 
 func (b *RouteBuilder[Req, Res]) OnSuccess(status int, desc string, ct ...string) *RouteBuilder[Req, Res] {
 	b.addResponse(status, desc, ct, false)
-
-	if b.responseSchemaNames == nil {
-		b.responseSchemaNames = make(map[int]string)
-	}
-
-	if _, exists := b.responseSchemaNames[status]; !exists {
-		b.responseSchemaNames[status] = getSchemaName[Res]()
-	}
-
-	b.syncSpec()
 	return b
 }
 
-func (b *RouteBuilder[Req, Res]) OnClientErr(status int, desc string, ct ...string) *RouteBuilder[Req, Res] {
-	if len(ct) == 0 {
-		ct = []string{CTProblemJSON}
-	}
-	b.addResponse(status, desc, ct, true)
-	b.syncSpec()
-	return b
-}
 
-func (b *RouteBuilder[Req, Res]) OnServerErr(status int, desc string, ct ...string) *RouteBuilder[Req, Res] {
-	if len(ct) == 0 {
-		ct = []string{CTProblemJSON}
-	}
-	b.addResponse(status, desc, ct, true)
-	b.syncSpec()
-	return b
-}
 
 func (b *RouteBuilder[Req, Res]) OnNoContent(status int, desc string) *RouteBuilder[Req, Res] {
 	b.responses = append(b.responses, ResponseSpec{Status: status, Description: desc, IsError: false})
-	b.syncSpec()
 	return b
 }
 
@@ -345,8 +266,41 @@ func (b *RouteBuilder[Req, Res]) PossibleErr(statuses ...int) *RouteBuilder[Req,
 		b.errorStatuses = append(b.errorStatuses, status)
 		b.addResponse(status, "Error", []string{CTProblemJSON}, true)
 	}
-	b.syncSpec()
 	return b
+}
+
+// copyMap — shallow copy map[int]string.
+func copyMap(m map[int]string) map[int]string {
+	if m == nil {
+		return nil
+	}
+	c := make(map[int]string, len(m))
+	for k, v := range m {
+		c[k] = v
+	}
+	return c
+}
+
+// copyAnyMap — shallow copy map[string]any.
+func copyAnyMap(m map[string]any) map[string]any {
+	if m == nil {
+		return nil
+	}
+	c := make(map[string]any, len(m))
+	maps.Copy(c, m)
+	return c
+}
+
+// copyResponseMap — shallow copy map[int]*oa.Response.
+func copyResponseMap(m map[int]*oa.Response) map[int]*oa.Response {
+	if m == nil {
+		return nil
+	}
+	c := make(map[int]*oa.Response, len(m))
+	for k, v := range m {
+		c[k] = v
+	}
+	return c
 }
 
 func (b *RouteBuilder[Req, Res]) addResponse(status int, desc string, ct []string, isError bool) {
@@ -365,30 +319,39 @@ func (b *RouteBuilder[Req, Res]) Register(mux *http.ServeMux) *RouteBuilder[Req,
 	if b.path == "" {
 		panic("nooa: path cannot be empty")
 	}
-	mux.HandleFunc(b.method+" "+b.path, b.handler)
+	handled := b.handler
+	// Оборачиваем handler middleware-ами в обратном порядке,
+	// чтобы первый добавленный middleware был самым внешним.
+	for i := len(b.middlewares) - 1; i >= 0; i-- {
+		handled = b.middlewares[i](handled)
+	}
+	mux.HandleFunc(b.method+" "+b.path, handled)
 	b.registerGlobal()
 	return b
 }
 
+// Spec возвращает глубокую копию RouteSpec, собранную из полей билдера.
+// Собирается лениво, при первом вызове.
 func (b *RouteBuilder[Req, Res]) Spec() RouteSpec {
-	if b.spec == nil {
-		b.syncSpec()
+	return RouteSpec{
+		Method:                b.method,
+		Path:                  b.path,
+		OperationID:           b.operationID,
+		Summary:               b.summary,
+		Description:           b.description,
+		Tags:                  append([]string(nil), b.tags...),
+		Deprecated:            b.deprecated,
+		Security:              append([]SecurityRequirement(nil), b.security...),
+		RequestContentType:    append([]string(nil), b.requestContentType...),
+		Responses:             append([]ResponseSpec(nil), b.responses...),
+		Handler:               b.handler,
+		RequestBodySchemaName: b.requestBodySchemaName,
+		ResponseSchemaNames:   copyMap(b.responseSchemaNames),
+		ErrorStatuses:         append([]int(nil), b.errorStatuses...),
+		Parameters:            append([]*oa.Parameter(nil), b.parameters...),
+		Extensions:            copyAnyMap(b.extensions),
+		ModelResponses:        copyResponseMap(b.modelResponses),
 	}
-	// Глубокая копия для безопасности
-	spec := *b.spec
-	spec.Tags = append([]string(nil), b.spec.Tags...)
-	spec.Security = append([]SecurityRequirement(nil), b.spec.Security...)
-	spec.RequestContentType = append([]string(nil), b.spec.RequestContentType...)
-	spec.Responses = append([]ResponseSpec(nil), b.spec.Responses...)
-	if b.spec.Extensions != nil {
-		spec.Extensions = make(map[string]any)
-		maps.Copy(spec.Extensions, b.spec.Extensions)
-	}
-	if b.spec.ModelResponses != nil {
-		spec.ModelResponses = make(map[int]*oa.Response)
-		maps.Copy(spec.ModelResponses, b.spec.ModelResponses)
-	}
-	return spec
 }
 
 func (b *RouteBuilder[Req, Res]) registerGlobal() *RouteBuilder[Req, Res] {
@@ -404,14 +367,13 @@ func WithResponse[Req, Res, T any](b *RouteBuilder[Req, Res], status int) *Route
 		b.responseSchemaNames = make(map[int]string)
 	}
 	b.responseSchemaNames[status] = schemaName
-	b.syncSpec()
 	return b
 }
 
 func getSchemaName[T any]() string {
 	var zero T
 	t := reflect.TypeOf(zero)
-	if t.Kind() == reflect.Ptr {
+	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 
@@ -430,17 +392,12 @@ func getSchemaName[T any]() string {
 
 func (b *RouteBuilder[Req, Res]) RegisterSpec(spec *Spec) *RouteBuilder[Req, Res] {
 	if spec != nil {
-		// Регистрируем модели в спецификации
 		reqName := getSchemaName[Req]()
 		resName := getSchemaName[Res]()
-
-		// Важно: регистрируем модели в Spec, а не глобально
 		spec.RegisterModel(reqName, new(Req))
 		if reqName != resName {
 			spec.RegisterModel(resName, new(Res))
 		}
-
-		// Добавляем роут в Spec
 		spec.AddRoute(b.Spec())
 	}
 	return b
