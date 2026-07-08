@@ -25,7 +25,7 @@ func (v *QueryParams) OaSchema() *oa.Schema {
 
 		prop.Description = "Request body field"
 
-		schema.Properties["bodyfield"] = prop
+		schema.Properties["body_field"] = prop
 	}
 
 	return schema

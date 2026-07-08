@@ -60,7 +60,7 @@ func main() {
 		Summary("Register new user (v1)").
 		Tags("Users").
 		OnSuccess(201, "User created successfully").
-		OnClientErr(400, "Validation failed").
+		PossibleErr(http.StatusBadRequest).
 		Register(mux).       // HTTP Handler
 		RegisterSpec(v1Spec) // Привязка к Spec
 

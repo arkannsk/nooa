@@ -253,6 +253,80 @@ func TestGlobalRegisterModel(t *testing.T) {
 	assert.Equal(t, "object", s.Type)
 }
 
+// mockResponseModel — структура с OaResponses()
+type mockResponseModel struct {
+	Data string
+}
+
+func (m *mockResponseModel) OaSchema() *oa.Schema {
+	return &oa.Schema{Type: "object"}
+}
+
+func (m *mockResponseModel) GlobalRef() string {
+	return "#/components/schemas/test.MockResponseModel"
+}
+
+func (m *mockResponseModel) OaResponses() map[int]*oa.Response {
+	return map[int]*oa.Response{
+		200: {
+			Description: "OK",
+			Content: map[string]*oa.MediaType{
+				"application/json": {Schema: &oa.Schema{Ref: "#/components/schemas/test.MockResponseModel"}},
+			},
+		},
+		404: {
+			Description: "Not Found",
+			Content: map[string]*oa.MediaType{
+				"application/json": {Schema: &oa.Schema{Ref: "#/components/schemas/test.MockResponseModel"}},
+			},
+		},
+	}
+}
+
+// mockResponseModel2 — вторая модель с перекрывающимся кодом 200
+type mockResponseModel2 struct{}
+
+func (m *mockResponseModel2) OaResponses() map[int]*oa.Response {
+	return map[int]*oa.Response{
+		200: {Description: "Override"},
+		500: {Description: "Server Error"},
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Tests for collectResponses
+// ---------------------------------------------------------------------------
+
+func TestCollectResponses_FromModel(t *testing.T) {
+	destination := make(map[int]*oa.Response)
+	collectResponses(new(mockResponseModel), destination)
+
+	assert.Len(t, destination, 2, "should collect 2 responses")
+	assert.NotNil(t, destination[200], "should have response for status 200")
+	assert.NotNil(t, destination[404], "should have response for status 404")
+	assert.Equal(t, "OK", destination[200].Description)
+	assert.Equal(t, "Not Found", destination[404].Description)
+}
+
+func TestCollectResponses_NonProvider(t *testing.T) {
+	destination := make(map[int]*oa.Response)
+	collectResponses(new(mockItem), destination)
+
+	assert.Empty(t, destination, "type without responsesProvider should not add responses")
+}
+
+func TestCollectResponses_MultipleModels(t *testing.T) {
+	destination := make(map[int]*oa.Response)
+	collectResponses(new(mockResponseModel), destination)
+
+	// Вторая модель с перекрывающимся кодом 200
+	collectResponses(new(mockResponseModel2), destination)
+
+	assert.Len(t, destination, 3, "should have 3 unique status codes")
+	assert.Equal(t, "Override", destination[200].Description, "second model should override 200")
+	assert.Equal(t, "Server Error", destination[500].Description)
+}
+
 func Test_registerNestedTypes(t *testing.T) {
 	tests := []struct {
 		name string // description of this test case

@@ -22,7 +22,7 @@ type SpecTransformer func(spec map[string]any) map[string]any
 
 // buildSpecFromData собирает spec из переданных данных (без глобальных переменных)
 func buildSpecFromData(info Info, routes []RouteSpec, schemas map[string]*oa.Schema, errorSchemas map[int]*errorSchema, explicitTags map[string]string, securitySchemes []SecurityScheme, defaultSecurity []SecurityRequirement) map[string]any {
-	refRemap := generateRefRemap(schemas)
+	refRemap := generateRefRemap(schemas, routes)
 	normalizedSchemas := normalizeAllSchemas(schemas, refRemap)
 	tags := collectTags(routes, explicitTags)
 
@@ -285,6 +285,30 @@ func collectRefsFromSchema(schema *oa.Schema, refs map[string]bool) {
 	}
 }
 
+// collectRefsFromResponses собирает $ref из ответов моделей.
+func collectRefsFromResponses(responses map[int]*oa.Response, refs map[string]bool) {
+	for _, resp := range responses {
+		for _, mt := range resp.Content {
+			if mt.Schema != nil && mt.Schema.Ref != "" {
+				ref := mt.Schema.Ref
+				if !strings.HasPrefix(ref, "#/") {
+					ref = "#/components/schemas/" + ref
+				}
+				refs[ref] = true
+			}
+		}
+		for _, header := range resp.Headers {
+			if header.Schema != nil && header.Schema.Ref != "" {
+				ref := header.Schema.Ref
+				if !strings.HasPrefix(ref, "#/") {
+					ref = "#/components/schemas/" + ref
+				}
+				refs[ref] = true
+			}
+		}
+	}
+}
+
 // shortNameFromRef извлекает короткое имя из полного $ref.
 // github.com/arkannsk/nooa/examples/models/03_nested.Address -> 03_nested.Address
 func shortNameFromRef(ref string) string {
@@ -304,13 +328,19 @@ func shortNameFromRef(ref string) string {
 
 // generateRefRemap строит мапу для замены полных $ref на короткие имена.
 // Проходит по всем схемам, собирает $ref из properties/items и сопоставляет их с ключами.
-func generateRefRemap(schemas map[string]*oa.Schema) map[string]string {
+// Также собирает $ref из ModelResponses маршрутов.
+func generateRefRemap(schemas map[string]*oa.Schema, routes []RouteSpec) map[string]string {
 	remap := make(map[string]string)
 
 	// Собираем все $ref из свойств схем
 	allRefs := make(map[string]bool)
 	for _, schema := range schemas {
 		collectRefsFromSchema(schema, allRefs)
+	}
+
+	// Собираем $ref из ModelResponses маршрутов
+	for _, r := range routes {
+		collectRefsFromResponses(r.ModelResponses, allRefs)
 	}
 
 	// Для каждого $ref находим подходящий ключ
@@ -401,7 +431,7 @@ func buildOperation(r RouteSpec, refRemap map[string]string, schemas map[string]
 	buildOperationExtensions(op, r.Extensions)
 	buildOperationParameters(op, r, refRemap, pathParamRegex)
 	buildOperationRequestBody(op, r, schemas)
-	op["responses"] = buildResponses(r, errorSchemas, schemas)
+	op["responses"] = buildResponses(r, errorSchemas, schemas, refRemap)
 
 	return op
 }
@@ -541,37 +571,129 @@ func buildOperationRequestBody(op map[string]any, r RouteSpec, schemas map[strin
 	}
 }
 
-func buildResponses(r RouteSpec, errorSchemas map[int]*errorSchema, schemas map[string]*oa.Schema) map[string]any {
+func buildResponses(r RouteSpec, errorSchemas map[int]*errorSchema, schemas map[string]*oa.Schema, refRemap map[string]string) map[string]any {
 	resps := make(map[string]any)
 
-	for _, resp := range r.Responses {
-		code := strconv.Itoa(resp.Status)
-		schemaName, hasSchema := r.ResponseSchemaNames[resp.Status]
+	// Сначала добавляем ответы из моделей (OaResponses)
+	for code, resp := range r.ModelResponses {
+		codeStr := strconv.Itoa(code)
+		respMap := buildResponseFromModel(resp, refRemap)
+		resps[codeStr] = respMap
+	}
 
-		if resp.Status == 204 || resp.Status == 205 {
-			resps[code] = map[string]any{"description": resp.Description}
+	// Затем добавляем явно заданные ответы (из Responses билдера).
+	// Если для того же status code уже есть ответ из модели — сливаем media types.
+	// Явный description переопределяет description из модели.
+	for _, resp := range r.Responses {
+		addExplicitResponse(resps, resp, r.ResponseSchemaNames, errorSchemas, schemas, refRemap)
+	}
+
+	// Для статусов, записанных в ResponseSchemaNames, но не покрытых ни ModelResponses, ни Responses,
+	// автоматически генерируем ответ с соответствующей схемой.
+	for status, schemaName := range r.ResponseSchemaNames {
+		code := strconv.Itoa(status)
+		if _, exists := resps[code]; exists {
 			continue
 		}
-
-		content := map[string]any{}
-		for _, ct := range resp.ContentTypes {
-			schemaObj := buildResponseSchemaObject(resp, ct, schemaName, hasSchema, errorSchemas, schemas)
-			content[ct] = map[string]any{"schema": schemaObj}
+		if _, exists := schemas[schemaName]; !exists {
+			continue
 		}
-
-		desc := buildResponseDescription(resp, errorSchemas)
-
-		if len(content) > 0 {
-			resps[code] = map[string]any{
-				"description": desc,
-				"content":     content,
-			}
-		} else {
-			resps[code] = map[string]any{"description": desc}
+		resps[code] = map[string]any{
+			"description": "Success",
+			"content": map[string]any{
+				CTJSON: map[string]any{
+					"schema": map[string]any{"$ref": "#/components/schemas/" + schemaName},
+				},
+			},
 		}
 	}
 
 	return resps
+}
+
+// addExplicitResponse добавляет явно заданный ответ (из Responses билдера) в resps,
+// сливая content с существующим ответом из модели если он есть.
+func addExplicitResponse(resps map[string]any, resp ResponseSpec, responseSchemaNames map[int]string, errorSchemas map[int]*errorSchema, schemas map[string]*oa.Schema, refRemap map[string]string) {
+	code := strconv.Itoa(resp.Status)
+	schemaName, hasSchema := responseSchemaNames[resp.Status]
+
+	if resp.Status == 204 || resp.Status == 205 {
+		resps[code] = map[string]any{"description": resp.Description}
+		return
+	}
+
+	content := map[string]any{}
+	for _, ct := range resp.ContentTypes {
+		schemaObj := buildResponseSchemaObject(resp, ct, schemaName, hasSchema, errorSchemas, schemas)
+		content[ct] = map[string]any{"schema": schemaObj}
+	}
+
+	desc := buildResponseDescription(resp, errorSchemas)
+
+	// Если для этого status code уже есть ответ из модели — сливаем content
+	if existing, ok := resps[code].(map[string]any); ok {
+		// description из явного ответа приоритетнее
+		resps[code].(map[string]any)["description"] = desc
+		// сливаем content: media types из явного ответа добавляются/переопределяются
+		if existingContent, ok := existing["content"].(map[string]any); ok {
+			for mt, val := range content {
+				existingContent[mt] = val
+			}
+		} else if len(content) > 0 {
+			resps[code].(map[string]any)["content"] = content
+		}
+	} else if len(content) > 0 {
+		resps[code] = map[string]any{
+			"description": desc,
+			"content":     content,
+		}
+	} else {
+		resps[code] = map[string]any{"description": desc}
+	}
+}
+
+// buildResponseFromModel преобразует *oa.Response из OaResponses() в map[string]any для OpenAPI spec.
+func buildResponseFromModel(resp *oa.Response, refRemap map[string]string) map[string]any {
+	respMap := map[string]any{}
+	if resp.Description != "" {
+		respMap["description"] = resp.Description
+	}
+
+	if len(resp.Content) > 0 {
+		content := make(map[string]any)
+		for mediaType, mt := range resp.Content {
+			if mt.Schema != nil {
+				schemaObj := normalizeSchema(mt.Schema, refRemap)
+				if schemaObj != nil {
+					content[mediaType] = map[string]any{"schema": schemaObj}
+				}
+			}
+		}
+		if len(content) > 0 {
+			respMap["content"] = content
+		}
+	}
+
+	if len(resp.Headers) > 0 {
+		headers := make(map[string]any)
+		for name, header := range resp.Headers {
+			headerMap := map[string]any{
+				"name":  header.Name,
+				"in":    string(header.In),
+				"schema": normalizeSchema(header.Schema, refRemap),
+			}
+			if header.Description != "" {
+				headerMap["description"] = header.Description
+			}
+			if header.Required {
+				headerMap["required"] = true
+			}
+			headers[name] = headerMap
+		}
+		respMap["headers"] = headers
+	}
+
+	return respMap
 }
 
 // buildResponseSchemaObject определяет schema object для response.

@@ -88,7 +88,7 @@ func (v *CommonMetadata) OaSchema() *oa.Schema {
 
 		prop.Description = "Creation timestamp"
 
-		schema.Properties["createdat"] = prop
+		schema.Properties["created_at"] = prop
 	}
 	{
 		prop := &oa.Schema{}
@@ -97,7 +97,7 @@ func (v *CommonMetadata) OaSchema() *oa.Schema {
 
 		prop.Description = "Last update timestamp"
 
-		schema.Properties["updatedat"] = prop
+		schema.Properties["updated_at"] = prop
 	}
 
 	return schema
@@ -129,7 +129,7 @@ func (v *CreateLocationRequest) OaSchema() *oa.Schema {
 
 		prop.Description = "User ID"
 
-		schema.Properties["userid"] = prop
+		schema.Properties["user_id"] = prop
 	}
 
 	return schema

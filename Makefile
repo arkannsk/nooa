@@ -12,7 +12,7 @@ REDOC_DEST_DIR := static/redoc
 SCALAR_DEST_DIR := static/scalar
 
 install:
-	go install github.com/arkannsk/elval/cmd/elval-gen@latest
+	GOPROXY=direct go install github.com/arkannsk/elval/cmd/elval-gen@latest
 
 gen: install
 	go generate ./...

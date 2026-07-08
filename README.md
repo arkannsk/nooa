@@ -11,7 +11,7 @@ spec := nooa.NewSpec(nooa.Info{
 nooa.NewRoute[UserReq, UserRes]("POST", "/users", handleCreateUser).
     Summary("Create a user").
     Tags("Users").
-    OnSuccess(201, "User created").
+    PossibleErr(http.StatusBadRequest).
     RegisterSpecAndMux(mux, spec)
 
 nooa.RegisterVersionedAPI("", spec, mux)
@@ -79,13 +79,12 @@ nooa.NewRoute[CreateUserRequest, User]("POST", "/users", handleCreateUser).
     Summary("Create a new user").
     Description("Creates a user and returns the created resource").
     Tags("Users").
-    OnSuccess(201, "User created").
+    PossibleErr(http.StatusBadRequest).
     RegisterSpecAndMux(mux, spec)
 
 nooa.NewRoute[struct{}, User]("GET", "/users/{id}", handleGetUser).
     Summary("Get user by ID").
     Tags("Users").
-    OnSuccess(200, "User found").
     RegisterSpecAndMux(mux, spec)
 ```
 
@@ -122,16 +121,18 @@ spec := nooa.NewSpec(nooa.Info{
 })
 ```
 
-| Method                                 | Description                       |
-| -------------------------------------- | --------------------------------- |
-| `AddRoute(r RouteSpec)`                | Add a route to the specification  |
-| `RegisterModel(name, instance)`        | Register a model schema           |
-| `AddTag(name, description)`            | Register a tag with a description |
-| `AddError(status, model, description)` | Register a global error schema    |
-| `AddSecurityScheme(name, scheme)`      | Register a security scheme        |
-| `DefaultSecurity(reqs...)`             | Set global security requirements  |
-| `SetTransformers(fns...)`              | Add spec transformers             |
-| `ServeHTTP(w, r)`                      | Serve the generated OpenAPI JSON  |
+| Method                                 | Description                                                |
+| -------------------------------------- | ---------------------------------------------------------- |
+| `AddRoute(r RouteSpec)`                | Add a route to the specification                           |
+| `RegisterModel(name, instance)`        | Register a model schema                                    |
+| `AddTag(name, description)`            | Register a tag with a description                          |
+| `AddError(status, model, description)` | Register a global error schema                             |
+| `AddSecurityScheme(name, scheme)`      | Register a security scheme                                 |
+| `DefaultSecurity(reqs...)`             | Set global security requirements                           |
+| `Use(middlewares...)`                  | Add middleware for all routes registered via `RegisterMux` |
+| `SetTransformers(fns...)`              | Add spec transformers                                      |
+| `ServeHTTP(w, r)`                      | Serve the generated OpenAPI JSON                           |
+| `RegisterMux(mux, r)`                  | Register a `RouteSpec` in mux with spec middleware applied |
 
 ### Routes
 
@@ -145,35 +146,48 @@ nooa.NewRoute[RequestType, ResponseType](method, path, handler).
     OperationID("customId").
     Secure("bearerAuth", "read", "write").
     OnSuccess(200, "OK").
-    OnClientErr(400, "Bad request").
-    OnServerErr(500, "Internal error").
     OnNoContent(204, "Deleted").
     PossibleErr(http.StatusBadRequest, http.StatusNotFound).
+    Use(middleware1, middleware2).
     Prefix("/api/v1").
     RegisterSpecAndMux(mux, spec)
 ```
 
-| Method                             | Description                        |
-| ---------------------------------- | ---------------------------------- |
-| `Summary(s)`                       | Operation summary                  |
-| `Description(s)`                   | Operation description              |
-| `Tags(...)`                        | Assign tags to the route           |
-| `OperationID(id)`                  | Custom operation ID                |
-| `Deprecated()`                     | Mark as deprecated                 |
-| `Secure(scheme, scopes...)`        | Per-route security requirement     |
-| `RequestContentType(cts...)`       | Override request content types     |
-| `RequestBodySchema(name)`          | Override request body schema name  |
-| `ResponseSchema(status, name)`     | Bind a schema to a status code     |
-| `OnSuccess(status, desc, ct...)`   | Success response                   |
-| `OnClientErr(status, desc, ct...)` | 4xx error response                 |
-| `OnServerErr(status, desc, ct...)` | 5xx error response                 |
-| `OnNoContent(status, desc)`        | 204-like no-body response          |
-| `PossibleErr(statuses...)`         | Reference global error schemas     |
-| `Prefix(p)`                        | Add path prefix (e.g. `/api/v1`)   |
-| `Extension(key, value)`            | Add vendor extension (`x-...`)     |
-| `Register(mux)`                    | Register handler in mux (no spec)  |
-| `RegisterSpec(spec)`               | Register in spec only (no handler) |
-| `RegisterSpecAndMux(mux, spec)`    | Register both                      |
+| Method                           | Description                             |
+| -------------------------------- | --------------------------------------- |
+| `Summary(s)`                     | Operation summary                       |
+| `Description(s)`                 | Operation description                   |
+| `Tags(...)`                      | Assign tags to the route                |
+| `OperationID(id)`                | Custom operation ID                     |
+| `Deprecated()`                   | Mark as deprecated                      |
+| `Secure(scheme, scopes...)`      | Per-route security requirement          |
+| `RequestContentType(cts...)`     | Override request content types          |
+| `RequestBodySchema(name)`        | Override request body schema name       |
+| `ResponseSchema(status, name)`   | Bind a schema to a status code          |
+| `Response(status, schema, desc)` | Arbitrary response with custom schema   |
+| `OnSuccess(status, desc, ct...)` | Success response (description override) |
+| `OnNoContent(status, desc)`      | 204-like no-body response               |
+| `PossibleErr(statuses...)`       | Reference global error schemas          |
+| `Use(middlewares...)`            | Add per-route middleware                |
+| `Prefix(p)`                      | Add path prefix (e.g. `/api/v1`)        |
+| `Extension(key, value)`          | Add vendor extension (`x-...`)          |
+| `Register(mux)`                  | Register handler in mux (no spec)       |
+| `RegisterSpec(spec)`             | Register in spec only (no handler)      |
+| `RegisterSpecAndMux(mux, spec)`  | Register both                           |
+
+### Multiple Response Types
+
+When a route returns different types for different status codes, use `NewRouteMultiResp`:
+
+```go
+nooa.NewRouteMultiResp[Req]("POST", "/jobs", handler,
+    nooa.ResponseEntry{Status: 201, Instance: new(CreatedJob), Desc: "Created"},
+    nooa.ResponseEntry{Status: 202, Instance: new(AcceptedJob), Desc: "Processing"},
+).RegisterSpecAndMux(mux, spec)
+```
+
+Each entry registers its schema automatically and binds it to the given status code.
+The API is identical to `RouteBuilder` (Summary, Tags, Secure, Use, etc.).
 
 ### Tags
 
@@ -207,6 +221,28 @@ nooa.NewRoute[Req, Res]("GET", "/users/{id}", handler).
 ```
 
 The error model is automatically registered in `components/schemas`.
+
+### Middleware
+
+Add per-route middleware with `.Use()`:
+
+```go
+nooa.NewRoute[Req, Res]("GET", "/admin", handler).
+    Use(authMiddleware, rateLimit).
+    Register(mux)
+```
+
+Add middleware to all routes in a spec group with `spec.Use()`:
+
+```go
+spec.Use(loggingMiddleware, corsMiddleware)
+
+nooa.NewRoute[Req, Res]("GET", "/users", handler).
+    Use(rateLimit).                    // route middleware (closest to handler)
+    RegisterSpecAndMux(mux, spec)      // spec middleware applied as outermost
+```
+
+Execution order: `spec middleware → route middleware → handler`.
 
 ### Security
 
@@ -314,6 +350,60 @@ spec.SetTransformers(func(spec map[string]any) map[string]any {
 })
 ```
 
+## Response Status Codes
+
+Control which HTTP status codes appear in the OpenAPI spec using `@oa:response` annotations on your response models:
+
+```go
+// Only 201
+// @oa:response "201" "application/json"
+type CreateUserResponse struct {
+    ID int `json:"id"`
+}
+
+// Both 200 and 201
+// @oa:response "200" "application/json,application/xml"
+// @oa:response "201" "application/json"
+type CreateResult struct {
+    ID int `json:"id"`
+}
+
+// Error response at 400
+// @oa:response "400" "application/problem+json"
+type ErrorResponse struct {
+    Message string `json:"message"`
+}
+```
+
+If a model has no `@oa:response` annotation, nooa defaults to **200**.
+The response schema is only bound to the status codes declared by the model — no extra status codes are generated.
+
+### Multiple response types per route
+
+When a route returns different types for different status codes, use `.Response()`:
+
+```go
+spec.RegisterModel("AcceptedJob", new(AcceptedJob))
+
+nooa.NewRoute[Req, CreatedUser]("POST", "/jobs", handler).
+    Response(201, "CreatedUser", "Job created").
+    Response(202, "AcceptedJob", "Processing...", nooa.CTJSON).
+    RegisterSpecAndMux(mux, spec)
+```
+
+This generates separate `201` and `202` responses with their own schemas in the OpenAPI spec.
+
+Alternatively, use `NewRouteMultiResp` to declare all response types upfront:
+
+```go
+nooa.NewRouteMultiResp[Req]("POST", "/jobs", handler,
+    nooa.ResponseEntry{Status: 201, Instance: new(CreatedUser), Desc: "Job created"},
+    nooa.ResponseEntry{Status: 202, Instance: new(AcceptedJob), Desc: "Processing"},
+).RegisterSpecAndMux(mux, spec)
+```
+
+Each entry automatically registers its schema and binds it to the given status code.
+
 ## HTTP Parameters
 
 Use `@oa:in` annotations to document query, path, and header parameters:
@@ -342,19 +432,20 @@ nooa relies on [elval-gen](https://github.com/arkannsk/elval) for schema generat
 
 ### Schema Annotations (`@oa:*`)
 
-| Annotation                       | Description               | Example                                              |
-| -------------------------------- | ------------------------- | ---------------------------------------------------- |
-| `@oa:description`                | Field or type description | `// @oa:description "User name"`                     |
-| `@oa:example`                    | Example value             | `// @oa:example "hello"`                             |
-| `@oa:default`                    | Default value             | `// @oa:default "active"`                            |
-| `@oa:enum`                       | Enum values               | `// @oa:enum active,inactive,pending`                |
-| `@oa:in`                         | Parameter location        | `// @oa:in query` or `// @oa:in header X-API-Key`    |
-| `@oa:ignore`                     | Exclude field from schema | `// @oa:ignore`                                      |
-| `@oa:rewrite`                    | Override field type       | `// @oa:rewrite "string"`                            |
-| `@oa:rewrite.ref`                | Override `$ref` target    | `// @oa:rewrite.ref "#/components/schemas/GeoPoint"` |
-| `@oa:oneOf`                      | Polymorphic variants      | `// @oa:oneOf "CircleShape,RectangleShape"`          |
-| `@oa:discriminator.propertyName` | Discriminator property    | `// @oa:discriminator.propertyName "type"`           |
-| `@oa:discriminator.mapping`      | Discriminator mapping     | `// @oa:discriminator.mapping "circle:CircleShape"`  |
+| Annotation                       | Description                   | Example                                              |
+| -------------------------------- | ----------------------------- | ---------------------------------------------------- |
+| `@oa:description`                | Field or type description     | `// @oa:description "User name"`                     |
+| `@oa:example`                    | Example value                 | `// @oa:example "hello"`                             |
+| `@oa:default`                    | Default value                 | `// @oa:default "active"`                            |
+| `@oa:enum`                       | Enum values                   | `// @oa:enum active,inactive,pending`                |
+| `@oa:in`                         | Parameter location            | `// @oa:in query` or `// @oa:in header X-API-Key`    |
+| `@oa:ignore`                     | Exclude field from schema     | `// @oa:ignore`                                      |
+| `@oa:rewrite`                    | Override field type           | `// @oa:rewrite "string"`                            |
+| `@oa:rewrite.ref`                | Override `$ref` target        | `// @oa:rewrite.ref "#/components/schemas/GeoPoint"` |
+| `@oa:oneOf`                      | Polymorphic variants          | `// @oa:oneOf "CircleShape,RectangleShape"`          |
+| `@oa:discriminator.propertyName` | Discriminator property        | `// @oa:discriminator.propertyName "type"`           |
+| `@oa:discriminator.mapping`      | Discriminator mapping         | `// @oa:discriminator.mapping "circle:CircleShape"`  |
+| `@oa:response`                   | Response status + media types | `// @oa:response "201" "application/json"`           |
 
 ### Validation Annotations (`@evl:validate`)
 
