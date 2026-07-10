@@ -1,0 +1,191 @@
+{
+  "components": {
+    "schemas": {
+      "04_slice_maps.ArrayFixed": {
+        "description": "Struct with fixed-size arrays",
+        "properties": {
+          "coords": {
+            "description": "Exactly 3 coordinates",
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "tags": {
+            "description": "Up to 10 tags",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "04_slice_maps.Item": {
+        "description": "Generic item",
+        "properties": {
+          "id": {
+            "description": "Item ID",
+            "type": "string"
+          },
+          "name": {
+            "description": "Item name",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "04_slice_maps.MapVariations": {
+        "description": "Struct with map fields",
+        "properties": {
+          "complex": {
+            "description": "Nested map",
+            "type": "object"
+          },
+          "counts": {
+            "description": "String-to-int map",
+            "type": "object"
+          },
+          "items": {
+            "description": "String-to-struct map",
+            "type": "object"
+          },
+          "metadata": {
+            "description": "String-to-string map",
+            "example": "{\"key\": \"value\"}",
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "04_slice_maps.SliceVariations": {
+        "description": "Struct with various slice types",
+        "properties": {
+          "ids": {
+            "description": "Slice of integers",
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "items": {
+            "description": "Slice of nested structs",
+            "items": {
+              "$ref": "#/components/schemas/04_slice_maps.Item"
+            },
+            "type": "array"
+          },
+          "optionaltags": {
+            "description": "Optional slice (nullable)",
+            "type": "object"
+          },
+          "ptritems": {
+            "description": "Slice of pointers to structs",
+            "items": {
+              "$ref": "#/components/schemas/04_slice_maps.Item"
+            },
+            "type": "array"
+          },
+          "tags": {
+            "description": "Slice of strings",
+            "example": "[\"a\", \"b\", \"c\"]",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "04 Slice/Map Demo",
+    "description": "Integration example: slices, maps, and fixed arrays",
+    "version": "1.0.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/arrays": {
+      "get": {
+        "deprecated": false,
+        "description": "Returns a struct with fixed-size arrays and min/max constraints",
+        "operationId": "GETArrays",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/04_slice_maps.ArrayFixed"
+                }
+              }
+            },
+            "description": "Arrays retrieved"
+          }
+        },
+        "summary": "Get fixed arrays",
+        "tags": [
+          "Collections"
+        ]
+      }
+    },
+    "/maps": {
+      "get": {
+        "deprecated": false,
+        "description": "Returns a struct with various map types including nested maps",
+        "operationId": "GETMaps",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/04_slice_maps.MapVariations"
+                }
+              }
+            },
+            "description": "Maps retrieved"
+          }
+        },
+        "summary": "Get map variations",
+        "tags": [
+          "Collections"
+        ]
+      }
+    },
+    "/slices": {
+      "get": {
+        "deprecated": false,
+        "description": "Returns a struct with various slice types including nested struct slices",
+        "operationId": "GETSlices",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/04_slice_maps.SliceVariations"
+                }
+              }
+            },
+            "description": "Slices retrieved"
+          }
+        },
+        "summary": "Get slice variations",
+        "tags": [
+          "Collections"
+        ]
+      }
+    }
+  },
+  "servers": [
+    {
+      "description": "Local server",
+      "url": "."
+    }
+  ],
+  "tags": [
+    {
+      "description": "Слайсы, карты и фиксированные массивы",
+      "name": "Collections"
+    }
+  ]
+}

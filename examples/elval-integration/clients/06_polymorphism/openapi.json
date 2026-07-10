@@ -1,0 +1,228 @@
+{
+  "components": {
+    "schemas": {
+      "06_polymorphism.CircleShape": {
+        "description": "Circle geometry",
+        "properties": {
+          "radius": {
+            "description": "Radius in meters",
+            "type": "number"
+          },
+          "type": {
+            "enum": [
+              "circle"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "type": "object"
+      },
+      "06_polymorphism.Container": {
+        "description": "Container with polymorphic shape",
+        "properties": {
+          "shape": {
+            "$ref": "#/components/schemas/06_polymorphism.Shape"
+          }
+        },
+        "type": "object"
+      },
+      "06_polymorphism.NumberValue": {
+        "description": "NumberValue schema",
+        "properties": {
+          "value": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "06_polymorphism.OneOfExample": {
+        "description": "Value that can be string or number",
+        "properties": {
+          "value": {
+            "description": "Flexible value",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/06_polymorphism.StringValue"
+              },
+              {
+                "$ref": "#/components/schemas/06_polymorphism.NumberValue"
+              }
+            ],
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "06_polymorphism.RectangleShape": {
+        "description": "Rectangle geometry",
+        "properties": {
+          "height": {
+            "description": "Height in meters",
+            "type": "number"
+          },
+          "type": {
+            "enum": [
+              "rectangle"
+            ],
+            "type": "string"
+          },
+          "width": {
+            "description": "Width in meters",
+            "type": "number"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "type": "object"
+      },
+      "06_polymorphism.Shape": {
+        "description": "Geometric shape (polymorphic)",
+        "discriminator": {
+          "mapping": {
+            "circle": "CircleShape",
+            "rectangle": "RectangleShape"
+          },
+          "propertyName": "type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/06_polymorphism.CircleShape"
+          },
+          {
+            "$ref": "#/components/schemas/06_polymorphism.RectangleShape"
+          }
+        ],
+        "type": "object"
+      },
+      "06_polymorphism.StringValue": {
+        "description": "StringValue schema",
+        "properties": {
+          "value": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "06 Polymorphism Demo",
+    "description": "Integration example: oneOf, discriminator, and polymorphic types",
+    "version": "1.0.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/circle": {
+      "get": {
+        "deprecated": false,
+        "description": "Returns a circle geometry",
+        "operationId": "GETCircle",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/06_polymorphism.CircleShape"
+                }
+              }
+            },
+            "description": "Circle shape retrieved"
+          }
+        },
+        "summary": "Get circle shape",
+        "tags": [
+          "Shapes"
+        ]
+      }
+    },
+    "/container": {
+      "get": {
+        "deprecated": false,
+        "description": "Returns a container with a polymorphic shape field using discriminator",
+        "operationId": "GETContainer",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/06_polymorphism.Container"
+                }
+              }
+            },
+            "description": "Container retrieved"
+          }
+        },
+        "summary": "Get container with shape",
+        "tags": [
+          "Polymorphism"
+        ]
+      }
+    },
+    "/oneof": {
+      "get": {
+        "deprecated": false,
+        "description": "Returns a value that can be a string or a number (oneOf without discriminator)",
+        "operationId": "GETOneof",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/06_polymorphism.OneOfExample"
+                }
+              }
+            },
+            "description": "OneOf value retrieved"
+          }
+        },
+        "summary": "Get oneOf example",
+        "tags": [
+          "Polymorphism"
+        ]
+      }
+    },
+    "/rectangle": {
+      "get": {
+        "deprecated": false,
+        "description": "Returns a rectangle geometry",
+        "operationId": "GETRectangle",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/06_polymorphism.RectangleShape"
+                }
+              }
+            },
+            "description": "Rectangle shape retrieved"
+          }
+        },
+        "summary": "Get rectangle shape",
+        "tags": [
+          "Shapes"
+        ]
+      }
+    }
+  },
+  "servers": [
+    {
+      "description": "Local server",
+      "url": "."
+    }
+  ],
+  "tags": [
+    {
+      "description": "Полиморфизм: oneOf, discriminator и полиморфные типы",
+      "name": "Polymorphism"
+    },
+    {
+      "description": "Геометрические фигуры с дискриминатором",
+      "name": "Shapes"
+    }
+  ]
+}

@@ -1,0 +1,297 @@
+{
+  "components": {
+    "schemas": {
+      "08_http_params.HeaderParams": {
+        "description": "Request with header parameters",
+        "properties": {
+          "content": {
+            "description": "Request content",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "08_http_params.MixedParams": {
+        "description": "Request with mixed parameter locations",
+        "properties": {
+          "data": {
+            "description": "Request body",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "08_http_params.PathParams": {
+        "description": "Request with path parameters",
+        "properties": {
+          "payload": {
+            "description": "Update payload",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "08_http_params.QueryParams": {
+        "description": "Request with query parameters",
+        "properties": {
+          "body_field": {
+            "description": "Request body field",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "apiKey": {
+        "description": "API key authentication",
+        "in": "header",
+        "name": "X-API-Key",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "title": "08 HTTP Parameters Demo",
+    "description": "Integration example: query, path, and header parameters with @oa:in annotations",
+    "version": "1.0.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/header-demo": {
+      "post": {
+        "deprecated": false,
+        "description": "Demonstrates header parameters: X-API-Key, request-id. Fields annotated with @oa:in header are documented as header parameters.",
+        "operationId": "POSTHeader-demo",
+        "parameters": [
+          {
+            "description": "X-API-Key parameter",
+            "in": "header",
+            "name": "X-API-Key",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "request-id parameter",
+            "in": "header",
+            "name": "request-id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/08_http_params.HeaderParams"
+              }
+            }
+          },
+          "description": "Request with header parameters",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/08_http_params.HeaderParams"
+                }
+              }
+            },
+            "description": "Header params received"
+          }
+        },
+        "summary": "Request with header parameters",
+        "tags": [
+          "Parameters"
+        ]
+      }
+    },
+    "/items/{id}": {
+      "get": {
+        "deprecated": false,
+        "description": "Demonstrates a combination of path, query, and header parameters in a single struct. Each field's location is determined by its @oa:in annotation.",
+        "operationId": "GETItemsId",
+        "parameters": [
+          {
+            "description": "id parameter",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "filter parameter",
+            "in": "query",
+            "name": "filter",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "X-Auth-Token parameter",
+            "in": "header",
+            "name": "X-Auth-Token",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/08_http_params.MixedParams"
+                }
+              }
+            },
+            "description": "Item retrieved"
+          }
+        },
+        "summary": "Mixed parameter locations",
+        "tags": [
+          "Parameters"
+        ]
+      }
+    },
+    "/search": {
+      "get": {
+        "deprecated": false,
+        "description": "Demonstrates query parameters: q, page, limit, status. Fields annotated with @oa:in query are documented as operation parameters.",
+        "operationId": "GETSearch",
+        "parameters": [
+          {
+            "description": "Query parameter",
+            "in": "query",
+            "name": "Query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Page parameter",
+            "in": "query",
+            "name": "Page",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Limit parameter",
+            "in": "query",
+            "name": "Limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Status parameter",
+            "in": "query",
+            "name": "Status",
+            "schema": {
+              "enum": [
+                "active",
+                "inactive",
+                "pending"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/08_http_params.QueryParams"
+                }
+              }
+            },
+            "description": "Search results"
+          }
+        },
+        "summary": "Search with query parameters",
+        "tags": [
+          "Parameters"
+        ]
+      }
+    },
+    "/users/{userId}/resources/{resource_id}": {
+      "put": {
+        "deprecated": false,
+        "description": "Demonstrates path parameters: userId, resource_id. Fields annotated with @oa:in path are documented as required path parameters.",
+        "operationId": "PUTUsersUserIdResourcesResource_id",
+        "parameters": [
+          {
+            "description": "userId parameter",
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "resource_id parameter",
+            "in": "path",
+            "name": "resource_id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/08_http_params.PathParams"
+              }
+            }
+          },
+          "description": "Update resource by path parameters",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/08_http_params.PathParams"
+                }
+              }
+            },
+            "description": "Resource updated"
+          }
+        },
+        "summary": "Update resource by path parameters",
+        "tags": [
+          "Parameters"
+        ]
+      }
+    }
+  },
+  "security": [
+    {
+      "apiKey": []
+    }
+  ],
+  "servers": [
+    {
+      "description": "Local server",
+      "url": "."
+    }
+  ],
+  "tags": [
+    {
+      "description": "HTTP-параметры: query, path, header через @oa:in",
+      "name": "Parameters"
+    }
+  ]
+}

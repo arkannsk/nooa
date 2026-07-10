@@ -68,6 +68,21 @@ redoc:
 	@echo "Redoc installed successfully!"
 	@echo "IMPORTANT: Restart your Go server to embed changes."
 
+# Generate HTTP client for a specific elval-integration example.
+# Usage: make gen-client EXAMPLE=01_basic_types
+gen-client:
+	@bash scripts/gen-client.sh
+
+# Generate HTTP clients for all elval-integration examples.
+# Usage: make gen-clients-all
+gen-clients-all:
+	@for example in 01_basic_types 02_files_stream 03_nested 04_slice_maps 05_generics \
+			  06_polymorphism 07_rewrite 08_http_params 09_ignore 10_validators \
+			  11_edge_cases 12_custom_types 13_mixed 14_struct_tags 15_response_content; do \
+		echo "=== Generating client for $$example ==="; \
+		EXAMPLE=$$example bash scripts/gen-client.sh; \
+	done
+
 scalar:
 	@echo "Downloading Scalar..."
 	@mkdir -p $(SCALAR_DEST_DIR)

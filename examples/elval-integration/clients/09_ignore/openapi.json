@@ -1,0 +1,120 @@
+{
+  "components": {
+    "schemas": {
+      "09_ignore.OnlyIgnoredFields": {
+        "description": "Struct with all fields ignored",
+        "type": "object"
+      },
+      "09_ignore.WithIgnoredField": {
+        "description": "Struct with ignored field",
+        "properties": {
+          "public": {
+            "description": "Public field",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "09_ignore.WithOverride": {
+        "description": "Field overrides ignored type",
+        "properties": {
+          "file": {
+            "description": "This field is included despite type being @oa:ignore",
+            "format": "binary",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "09 Ignore Demo",
+    "description": "Integration example: @oa:ignore annotation on types and fields",
+    "version": "1.0.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/ignored-field": {
+      "get": {
+        "deprecated": false,
+        "description": "Demonstrates @oa:ignore on a struct field. The `Public` field appears in the OpenAPI schema, but `Internal` (annotated with @oa:ignore) is excluded.",
+        "operationId": "GETIgnored-field",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/09_ignore.WithIgnoredField"
+                }
+              }
+            },
+            "description": "Struct with ignored field retrieved"
+          }
+        },
+        "summary": "Struct with an ignored field",
+        "tags": [
+          "Ignore"
+        ]
+      }
+    },
+    "/only-ignored": {
+      "get": {
+        "deprecated": false,
+        "description": "Demonstrates a struct where all fields are annotated with @oa:ignore. The resulting OpenAPI schema has an empty properties map.",
+        "operationId": "GETOnly-ignored",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/09_ignore.OnlyIgnoredFields"
+                }
+              }
+            },
+            "description": "All-ignored struct retrieved"
+          }
+        },
+        "summary": "Struct with all fields ignored",
+        "tags": [
+          "Ignore"
+        ]
+      }
+    },
+    "/override": {
+      "get": {
+        "deprecated": false,
+        "description": "Demonstrates @oa:file overriding an @oa:ignore type. The `IgnoredType` struct is ignored",
+        "operationId": "GETOverride",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/09_ignore.WithOverride"
+                }
+              }
+            },
+            "description": "Override struct retrieved"
+          }
+        },
+        "summary": "Field overrides ignored type",
+        "tags": [
+          "Ignore"
+        ]
+      }
+    }
+  },
+  "servers": [
+    {
+      "description": "Local server",
+      "url": "."
+    }
+  ],
+  "tags": [
+    {
+      "description": "Исключение полей и типов из OpenAPI через @oa:ignore",
+      "name": "Ignore"
+    }
+  ]
+}

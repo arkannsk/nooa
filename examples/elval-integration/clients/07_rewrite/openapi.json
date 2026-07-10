@@ -1,0 +1,293 @@
+{
+  "components": {
+    "schemas": {
+      "07_rewrite.CommonMetadata": {
+        "description": "Reusable metadata schema",
+        "properties": {
+          "created_at": {
+            "description": "Creation timestamp",
+            "type": "string"
+          },
+          "updated_at": {
+            "description": "Last update timestamp",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "07_rewrite.CreateLocationRequest": {
+        "description": "Request to create a location with a geojson feature",
+        "properties": {
+          "feature": {
+            "$ref": "#/components/schemas/FeatureDocs"
+          },
+          "user_id": {
+            "description": "User ID",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "07_rewrite.CreateLocationWithPoint": {
+        "description": "Request to create a location with an orb point",
+        "properties": {
+          "location": {
+            "$ref": "#/components/schemas/PointDocs"
+          },
+          "name": {
+            "description": "Name of the location",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "07_rewrite.GeometryDocs": {
+        "description": "GeoJSON geometry object",
+        "properties": {
+          "coordinates": {
+            "description": "Geometry coordinates",
+            "type": "object"
+          },
+          "type": {
+            "description": "Geometry type",
+            "enum": [
+              "Point",
+              "LineString",
+              "Polygon",
+              "MultiPoint",
+              "MultiLineString",
+              "MultiPolygon",
+              "GeometryCollection"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "07_rewrite.WithRewriteRef": {
+        "description": "Struct referencing local stub schema",
+        "properties": {
+          "meta": {
+            "$ref": "#/components/schemas/CommonMetadata"
+          }
+        },
+        "type": "object"
+      },
+      "07_rewrite.WithRewriteType": {
+        "description": "Struct with type rewriting",
+        "properties": {
+          "customid": {
+            "description": "Custom ID type documented as integer",
+            "type": "integer"
+          },
+          "customlist": {
+            "description": "Custom slice documented as array",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "rawjson": {
+            "description": "JSON payload documented as string",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CommonMetadata": {
+        "description": "Reusable metadata schema",
+        "properties": {
+          "created_at": {
+            "description": "Creation timestamp",
+            "type": "string"
+          },
+          "updated_at": {
+            "description": "Last update timestamp",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "FeatureDocs": {
+        "description": "GeoJSON feature with type, geometry and properties",
+        "properties": {
+          "bbox": {
+            "description": "Feature bounding box",
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "geometry": {
+            "$ref": "#/components/schemas/GeometryDocs"
+          },
+          "properties": {
+            "description": "Feature properties (arbitrary JSON object)",
+            "type": "object"
+          },
+          "type": {
+            "description": "Must be 'Feature'",
+            "enum": [
+              "Feature"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "GeometryDocs": {
+        "description": "GeoJSON geometry object",
+        "properties": {
+          "coordinates": {
+            "description": "Geometry coordinates",
+            "type": "object"
+          },
+          "type": {
+            "description": "Geometry type",
+            "enum": [
+              "Point",
+              "LineString",
+              "Polygon",
+              "MultiPoint",
+              "MultiLineString",
+              "MultiPolygon",
+              "GeometryCollection"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PointDocs": {
+        "description": "A geographic point represented as [longitude, latitude]",
+        "properties": {
+          "latitude": {
+            "description": "Latitude",
+            "type": "number"
+          },
+          "longitude": {
+            "description": "Longitude",
+            "type": "number"
+          }
+        },
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "07 Rewrite Demo",
+    "description": "Integration example: type and reference rewriting in OpenAPI schemas",
+    "version": "1.0.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/geo-feature": {
+      "get": {
+        "deprecated": false,
+        "description": "Demonstrates replacing geojson.Feature type with our own FeatureDocs schema via @oa:rewrite.ref",
+        "operationId": "GETGeo-feature",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/07_rewrite.CreateLocationRequest"
+                }
+              }
+            },
+            "description": "GeoJSON feature retrieved"
+          }
+        },
+        "summary": "Get location with geojson Feature",
+        "tags": [
+          "Geo"
+        ]
+      }
+    },
+    "/geo-point": {
+      "get": {
+        "deprecated": false,
+        "description": "Demonstrates replacing orb.Point type with our own PointDocs schema via @oa:rewrite.ref",
+        "operationId": "GETGeo-point",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/07_rewrite.CreateLocationWithPoint"
+                }
+              }
+            },
+            "description": "GeoJSON point retrieved"
+          }
+        },
+        "summary": "Get location with orb Point",
+        "tags": [
+          "Geo"
+        ]
+      }
+    },
+    "/rewrite-ref": {
+      "get": {
+        "deprecated": false,
+        "description": "Demonstrates rewriting a field reference to a local stub schema via @oa:rewrite.ref",
+        "operationId": "GETRewrite-ref",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/07_rewrite.WithRewriteRef"
+                }
+              }
+            },
+            "description": "Rewrite ref struct retrieved"
+          }
+        },
+        "summary": "Get struct with rewritten references",
+        "tags": [
+          "Rewrite"
+        ]
+      }
+    },
+    "/rewrite-type": {
+      "get": {
+        "deprecated": false,
+        "description": "Demonstrates rewriting Go types to different OpenAPI types (json.RawMessage→string, custom ID→integer, custom list→array)",
+        "operationId": "GETRewrite-type",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/07_rewrite.WithRewriteType"
+                }
+              }
+            },
+            "description": "Rewrite type struct retrieved"
+          }
+        },
+        "summary": "Get struct with rewritten types",
+        "tags": [
+          "Rewrite"
+        ]
+      }
+    }
+  },
+  "servers": [
+    {
+      "description": "Local server",
+      "url": "."
+    }
+  ],
+  "tags": [
+    {
+      "description": "Переопределение типов и ссылок через @oa:rewrite",
+      "name": "Rewrite"
+    },
+    {
+      "description": "GeoJSON-типы с переопределением через @oa:rewrite.ref",
+      "name": "Geo"
+    }
+  ]
+}
