@@ -1,5 +1,7 @@
 package main
 
+//go:generate go run github.com/arkannsk/nooa/cmd/clientgen -pkg . -out ../../clients/13_mixed/client.go
+
 import (
 	"encoding/json"
 	"log"

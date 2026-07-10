@@ -102,6 +102,15 @@ func (s *Spec) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(data)
 }
 
+// ToJSON возвращает готовый JSON OpenAPI спецификации.
+// Можно использовать для экспорта без запуска HTTP сервера.
+//
+//	jsonBytes := spec.ToJSON()
+//	ioutil.WriteFile("openapi.json", jsonBytes, 0644)
+func (s *Spec) ToJSON() []byte {
+	return s.generate()
+}
+
 // generate строит JSON один раз при первом запросе (thread-safe).
 func (s *Spec) generate() []byte {
 	if !s.generated {
