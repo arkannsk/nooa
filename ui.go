@@ -41,7 +41,7 @@ func embeddedUIHandler(fs embed.FS, embedPath, basePrefix, specURL string, modif
 
 		// Redirect to index.html when accessing the prefix root
 		if cleanPath == basePrefix || path == basePrefix+"/" {
-			http.Redirect(w, r, path+"index.html", http.StatusFound)
+			http.Redirect(w, r, cleanPath+"/index.html", http.StatusFound)
 			return
 		}
 

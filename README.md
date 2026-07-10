@@ -490,21 +490,23 @@ type CreateUserRequest struct {
 
 The [`examples/elval-integration/`](examples/elval-integration/) directory contains 13 integration examples demonstrating every feature:
 
-| #   | Example                                                     | Description                                                       |
-| --- | ----------------------------------------------------------- | ----------------------------------------------------------------- |
-| 01  | [basic_types](examples/elval-integration/01_basic_types/)   | Primitive Go types mapped to OpenAPI schemas                      |
-| 02  | [files_stream](examples/elval-integration/02_files_stream/) | File types, streams, `io.Reader`, `multipart.File`                |
-| 03  | [nested](examples/elval-integration/03_nested/)             | Nested structs with automatic dependency discovery                |
-| 04  | [slice_maps](examples/elval-integration/04_slice_maps/)     | Slices, maps, and fixed arrays                                    |
-| 05  | [generics](examples/elval-integration/05_generics/)         | Generic types: `Option[T]`, `Result[T, E]`, custom generics       |
-| 06  | [polymorphism](examples/elval-integration/06_polymorphism/) | `oneOf` with discriminator and polymorphic shapes                 |
-| 07  | [rewrite](examples/elval-integration/07_rewrite/)           | Type rewriting with `@oa:rewrite` and `@oa:rewrite.ref`           |
-| 08  | [http_params](examples/elval-integration/08_http_params/)   | Query, path, and header parameters with security                  |
-| 09  | [ignore](examples/elval-integration/09_ignore/)             | Excluding fields and types with `@oa:ignore`                      |
-| 10  | [validators](examples/elval-integration/10_validators/)     | Validation constraints: strings, numbers, enums, dates            |
-| 11  | [edge_cases](examples/elval-integration/11_edge_cases/)     | Empty structs, pointer chains, circular refs, `nil`, interfaces   |
-| 12  | [custom_types](examples/elval-integration/12_custom_types/) | Type aliases, custom readers, embedded structs                    |
-| 13  | [mixed](examples/elval-integration/13_mixed/)               | Comprehensive example combining all features with OAuth2 security |
+| #   | Example                                                             | Description                                                       |
+| --- | ------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| 01  | [basic_types](examples/elval-integration/01_basic_types/)           | Primitive Go types mapped to OpenAPI schemas                      |
+| 02  | [files_stream](examples/elval-integration/02_files_stream/)         | File types, streams, `io.Reader`, `multipart.File`                |
+| 03  | [nested](examples/elval-integration/03_nested/)                     | Nested structs with automatic dependency discovery                |
+| 04  | [slice_maps](examples/elval-integration/04_slice_maps/)             | Slices, maps, and fixed arrays                                    |
+| 05  | [generics](examples/elval-integration/05_generics/)                 | Generic types: `Option[T]`, `Result[T, E]`, custom generics       |
+| 06  | [polymorphism](examples/elval-integration/06_polymorphism/)         | `oneOf` with discriminator and polymorphic shapes                 |
+| 07  | [rewrite](examples/elval-integration/07_rewrite/)                   | Type rewriting with `@oa:rewrite` and `@oa:rewrite.ref`           |
+| 08  | [http_params](examples/elval-integration/08_http_params/)           | Query, path, and header parameters with security                  |
+| 09  | [ignore](examples/elval-integration/09_ignore/)                     | Excluding fields and types with `@oa:ignore`                      |
+| 10  | [validators](examples/elval-integration/10_validators/)             | Validation constraints: strings, numbers, enums, dates            |
+| 11  | [edge_cases](examples/elval-integration/11_edge_cases/)             | Empty structs, pointer chains, circular refs, `nil`, interfaces   |
+| 12  | [custom_types](examples/elval-integration/12_custom_types/)         | Type aliases, custom readers, embedded structs                    |
+| 13  | [mixed](examples/elval-integration/13_mixed/)                       | Comprehensive example combining all features with OAuth2 security |
+| 14  | [struct_tags](examples/elval-integration/14_struct_tags/)           | Yaml,Json,XML - struct tags                                       |
+| 15  | [response_content](examples/elval-integration/15_response_content/) | Response with different codes                                     |
 
 Run any example:
 
