@@ -53,10 +53,44 @@ func (s *Spec) RegisterModel(name string, instance any) {
 }
 
 // AddRoute добавляет маршрут в спецификацию.
+// Автоматически копирует нужные схемы из глобального реестра,
+// чтобы OpenAPI генерация работала даже когда модели были
+// зарегистрированы только через NewRoute (в глобальный реестр),
+// а не через Spec.RegisterModel.
 func (s *Spec) AddRoute(r RouteSpec) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.routes = append(s.routes, r)
+
+	// Копируем схемы из глобального реестра, если они ещё не в Spec.
+	copySchemaIfNeeded := func(name string) {
+		if _, exists := s.schemas[name]; !exists {
+			if g, ok := globalSchemas[name]; ok {
+				s.schemas[name] = g
+			}
+		}
+	}
+
+	// Request body schema
+	if r.RequestBodySchemaName != "" {
+		copySchemaIfNeeded(r.RequestBodySchemaName)
+	}
+
+	// Response schemas
+	for _, name := range r.ResponseSchemaNames {
+		copySchemaIfNeeded(name)
+	}
+
+	// Схемы из ModelResponses
+	for _, resp := range r.ModelResponses {
+		for _, mt := range resp.Content {
+			if mt.Schema != nil && mt.Schema.Ref != "" {
+				shortName := extractShortName(mt.Schema.Ref)
+				copySchemaIfNeeded(shortName)
+			}
+		}
+	}
+
 	s.generated = false // инвалидируем кэш
 }
 
@@ -207,6 +241,13 @@ func (s *Spec) Use(middlewares ...func(http.HandlerFunc) http.HandlerFunc) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.middlewares = append(s.middlewares, middlewares...)
+}
+
+// Middlewares returns a copy of the spec-level middleware chain.
+func (s *Spec) Middlewares() []func(http.HandlerFunc) http.HandlerFunc {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return append([]func(http.HandlerFunc) http.HandlerFunc(nil), s.middlewares...)
 }
 
 // RegisterMux добавляет роут в Spec и регистрирует хендлер в mux.
