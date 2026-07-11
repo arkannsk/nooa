@@ -276,8 +276,6 @@ func (b *RouteBuilder[Req, Res]) OnSuccess(status int, desc string, ct ...string
 	return b
 }
 
-
-
 func (b *RouteBuilder[Req, Res]) OnNoContent(status int, desc string) *RouteBuilder[Req, Res] {
 	b.responses = append(b.responses, ResponseSpec{Status: status, Description: desc, IsError: false})
 	return b
@@ -322,9 +320,7 @@ func copyResponseMap(m map[int]*oa.Response) map[int]*oa.Response {
 		return nil
 	}
 	c := make(map[int]*oa.Response, len(m))
-	for k, v := range m {
-		c[k] = v
-	}
+	maps.Copy(c, m)
 	return c
 }
 

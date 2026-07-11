@@ -5,12 +5,13 @@ package basictypesdemo
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"bytes"
+	"encoding/json"
+	"strings"
+	"github.com/arkannsk/nooa/client"
 	basictypes "github.com/arkannsk/nooa/examples/models/01_basic_types"
 )
 
@@ -26,6 +27,10 @@ type Client struct {
 	HTTPClient  HTTPClient
 	Token       string
 	TokenPrefix string
+
+	// Codec maps Content-Type to client.Codec for response body decoding.
+	// If nil, defaults to JSON decoding for all types.
+	Codec map[string]client.Codec
 }
 
 // New creates a new Client.
@@ -53,12 +58,23 @@ type POSTDefaultsRequest struct {
 
 // POSTDefaultsResponse holds the response for POSTDefaults.
 type POSTDefaultsResponse struct {
-	// Status 200 — basic_types.WithDefaults
-	Status200 basictypes.WithDefaults
-	// StatusCode is the HTTP status code.
-	StatusCode int
-	// RawBody is the raw response body.
-	RawBody []byte
+	*http.Response
+	client *Client
+	status201 *basictypes.WithDefaults
+}
+
+func (r *POSTDefaultsResponse) StatusCreated() (*basictypes.WithDefaults, error) {
+	if r.StatusCode != 201 {
+		return nil, fmt.Errorf("expected status 201, got %d", r.StatusCode)
+	}
+	if r.status201 != nil {
+		return r.status201, nil
+	}
+	r.status201 = new(basictypes.WithDefaults)
+	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status201); err != nil {
+		return nil, err
+	}
+	return r.status201, nil
 }
 
 // POSTDefaults — Create with default values
@@ -89,21 +105,10 @@ func (c *Client) POSTDefaults(ctx context.Context, input *POSTDefaultsRequest) (
 	if err != nil {
 		return nil, fmt.Errorf("do request: %w", err)
 	}
-	defer resp.Body.Close()
-
-	raw, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
-	}
 
 	result := &POSTDefaultsResponse{
-		StatusCode: resp.StatusCode,
-		RawBody:    raw,
-	}
-	if resp.StatusCode == 200 {
-		if err := json.Unmarshal(raw, &result.Status200); err != nil {
-			return result, fmt.Errorf("unmarshal status 200: %w", err)
-		}
+		Response: resp,
+		client:   c,
 	}
 	if resp.StatusCode >= 400 {
 		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
@@ -119,12 +124,23 @@ func (c *Client) POSTDefaults(ctx context.Context, input *POSTDefaultsRequest) (
 
 // GETPointersResponse holds the response for GETPointers.
 type GETPointersResponse struct {
-	// Status 200 — basic_types.WithPointers
-	Status200 basictypes.WithPointers
-	// StatusCode is the HTTP status code.
-	StatusCode int
-	// RawBody is the raw response body.
-	RawBody []byte
+	*http.Response
+	client *Client
+	status200 *basictypes.WithPointers
+}
+
+func (r *GETPointersResponse) StatusOk() (*basictypes.WithPointers, error) {
+	if r.StatusCode != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	}
+	if r.status200 != nil {
+		return r.status200, nil
+	}
+	r.status200 = new(basictypes.WithPointers)
+	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
+		return nil, err
+	}
+	return r.status200, nil
 }
 
 // GETPointers — Get nullable pointer fields
@@ -146,21 +162,10 @@ func (c *Client) GETPointers(ctx context.Context) (*GETPointersResponse, error) 
 	if err != nil {
 		return nil, fmt.Errorf("do request: %w", err)
 	}
-	defer resp.Body.Close()
-
-	raw, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
-	}
 
 	result := &GETPointersResponse{
-		StatusCode: resp.StatusCode,
-		RawBody:    raw,
-	}
-	if resp.StatusCode == 200 {
-		if err := json.Unmarshal(raw, &result.Status200); err != nil {
-			return result, fmt.Errorf("unmarshal status 200: %w", err)
-		}
+		Response: resp,
+		client:   c,
 	}
 	if resp.StatusCode >= 400 {
 		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
@@ -182,12 +187,23 @@ type POSTPrimitivesRequest struct {
 
 // POSTPrimitivesResponse holds the response for POSTPrimitives.
 type POSTPrimitivesResponse struct {
-	// Status 200 — basic_types.SimplePrimitives
-	Status200 basictypes.SimplePrimitives
-	// StatusCode is the HTTP status code.
-	StatusCode int
-	// RawBody is the raw response body.
-	RawBody []byte
+	*http.Response
+	client *Client
+	status201 *basictypes.SimplePrimitives
+}
+
+func (r *POSTPrimitivesResponse) StatusCreated() (*basictypes.SimplePrimitives, error) {
+	if r.StatusCode != 201 {
+		return nil, fmt.Errorf("expected status 201, got %d", r.StatusCode)
+	}
+	if r.status201 != nil {
+		return r.status201, nil
+	}
+	r.status201 = new(basictypes.SimplePrimitives)
+	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status201); err != nil {
+		return nil, err
+	}
+	return r.status201, nil
 }
 
 // POSTPrimitives — Create with primitive types
@@ -218,21 +234,10 @@ func (c *Client) POSTPrimitives(ctx context.Context, input *POSTPrimitivesReques
 	if err != nil {
 		return nil, fmt.Errorf("do request: %w", err)
 	}
-	defer resp.Body.Close()
-
-	raw, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
-	}
 
 	result := &POSTPrimitivesResponse{
-		StatusCode: resp.StatusCode,
-		RawBody:    raw,
-	}
-	if resp.StatusCode == 200 {
-		if err := json.Unmarshal(raw, &result.Status200); err != nil {
-			return result, fmt.Errorf("unmarshal status 200: %w", err)
-		}
+		Response: resp,
+		client:   c,
 	}
 	if resp.StatusCode >= 400 {
 		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)

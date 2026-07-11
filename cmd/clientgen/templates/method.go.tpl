@@ -9,10 +9,6 @@
 {{- $hasResponse := false }}
 {{- if .ResponseBody }}{{ $hasResponse = true }}{{ end }}
 
-{{- define "retPrefix" -}}
-{{- if . }}nil, {{ end -}}
-{{- end -}}
-
 {{- if $hasParams }}
 
 // {{ .MethodName }}Request holds parameters for {{ .MethodName }}.
@@ -51,27 +47,39 @@ type {{ .MethodName }}Request struct {
 
 // {{ .MethodName }}Response holds the response for {{ .MethodName }}.
 type {{ .MethodName }}Response struct {
+	*http.Response
+	client *Client
 {{- range $code, $field := .ResponseBody.Fields }}
-	// Status {{ $code }} — {{ $field.SchemaName }}
-	Status{{ $code }} {{ $field.GoType }}
+	status{{ $code }} *{{ $field.GoType }}
 {{- end }}
-	// StatusCode is the HTTP status code.
-	StatusCode int
-	// RawBody is the raw response body.
-	RawBody []byte
 }
 
+{{- range $code, $field := .ResponseBody.Fields }}
+
+func (r *{{ $.MethodName }}Response) Status{{ toGoTypeName $code }}() (*{{ $field.GoType }}, error) {
+	if r.StatusCode != {{ $code }} {
+		return nil, fmt.Errorf("expected status {{ $code }}, got %d", r.StatusCode)
+	}
+	if r.status{{ $code }} != nil {
+		return r.status{{ $code }}, nil
+	}
+	r.status{{ $code }} = new({{ $field.GoType }})
+	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status{{ $code }}); err != nil {
+		return nil, err
+	}
+	return r.status{{ $code }}, nil
+}
+
+{{- end }}
 {{- end }}
 
 // {{ .MethodName }} — {{ .Summary }}
 func (c *Client) {{ .MethodName }}(ctx context.Context{{ if $hasParams }}, input *{{ .MethodName }}Request{{ end }}) {{ if $hasResponse }}(*{{ .MethodName }}Response, error){{ else }}error{{ end }} {
 {{- if .PathParams }}
 
-	{{- range .PathParams }}
 	if input == nil {
-		return {{ template "retPrefix" $hasResponse }}fmt.Errorf("{{ .Name }} is required")
+		return {{ if $hasResponse }}nil, {{ end }}fmt.Errorf("input is required")
 	}
-	{{- end }}
 {{- end }}
 
 	u := c.BaseURL + {{ .Path | printf "%q" }}
@@ -103,7 +111,7 @@ func (c *Client) {{ .MethodName }}(ctx context.Context{{ if $hasParams }}, input
 	if input != nil {
 		b, err := json.Marshal(input.Body)
 		if err != nil {
-			return {{ template "retPrefix" $hasResponse }}fmt.Errorf("marshal request body: %w", err)
+			return {{ if $hasResponse }}nil, {{ end }}fmt.Errorf("marshal request body: %w", err)
 		}
 		body = bytes.NewReader(b)
 	}
@@ -111,7 +119,7 @@ func (c *Client) {{ .MethodName }}(ctx context.Context{{ if $hasParams }}, input
 
 	httpReq, err := http.NewRequestWithContext(ctx, "{{ .Method }}", u, body)
 	if err != nil {
-		return {{ template "retPrefix" $hasResponse }}fmt.Errorf("create request: %w", err)
+		return {{ if $hasResponse }}nil, {{ end }}fmt.Errorf("create request: %w", err)
 	}
 {{- if .RequestBody }}
 	httpReq.Header.Set("Content-Type", "application/json")
@@ -130,30 +138,17 @@ func (c *Client) {{ .MethodName }}(ctx context.Context{{ if $hasParams }}, input
 		httpReq.Header.Set("Authorization", c.TokenPrefix+" "+c.Token)
 	}
 
-	resp, err := c.HTTPClient.Do(httpReq)
+	resp, err := c.HTTPClient.Do(ctx, httpReq)
 	if err != nil {
-		return {{ template "retPrefix" $hasResponse }}fmt.Errorf("do request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	raw, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return {{ template "retPrefix" $hasResponse }}fmt.Errorf("read response: %w", err)
+		return {{ if $hasResponse }}nil, {{ end }}fmt.Errorf("do request: %w", err)
 	}
 
 {{- if $hasResponse }}
 
 	result := &{{ .MethodName }}Response{
-		StatusCode: resp.StatusCode,
-		RawBody:    raw,
+		Response: resp,
+		client:   c,
 	}
-	{{- range $code, $field := .ResponseBody.Fields }}
-	if resp.StatusCode == {{ $code }} {
-		if err := json.Unmarshal(raw, &result.Status{{ $code }}); err != nil {
-			return result, fmt.Errorf("unmarshal status {{ $code }}: %w", err)
-		}
-	}
-	{{- end }}
 	if resp.StatusCode >= 400 {
 		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
 	}
@@ -161,8 +156,10 @@ func (c *Client) {{ .MethodName }}(ctx context.Context{{ if $hasParams }}, input
 {{- else }}
 
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("request failed: status %d body: %s", resp.StatusCode, string(raw))
+		_ = resp.Body.Close()
+		return fmt.Errorf("request failed: status %d", resp.StatusCode)
 	}
+	_ = resp.Body.Close()
 	return nil
 {{- end }}
 }

@@ -5,6 +5,7 @@ import (
 	"embed"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"text/template"
 )
@@ -59,31 +60,33 @@ func (g *Generator) Generate() ([]byte, error) {
 
 // TemplateData holds all data passed to the template.
 type TemplateData struct {
-	Package        string
-	Title          string
-	Version        string
-	Imports        []string
-	PackageAliases map[string]string // import path -> alias
-	Operations     []*OperationData
-	HasQueryParams bool
-	HasRequestBody bool
+	Package             string
+	Title               string
+	Version             string
+	Imports             []string
+	PackageAliases      map[string]string // import path -> alias
+	Operations          []*OperationData
+	HasQueryParams      bool
+	HasRequestBody      bool
+	HasStreamingResponse bool
 }
 
 // OperationData holds parsed data for a single operation.
 type OperationData struct {
-	Path         string
-	Method       string
-	ID           string
-	MethodName   string
-	Summary      string
-	Description  string
-	Tags         []string
-	PathParams   []ParameterData
-	QueryParams  []ParameterData
-	HeaderParams []ParameterData
-	RequestBody  *RequestBodyData
-	ResponseBody *ResponseBodyData
-	SuccessCodes []string
+	Path           string
+	Method         string
+	ID             string
+	MethodName     string
+	Summary        string
+	Description    string
+	Tags           []string
+	PathParams     []ParameterData
+	QueryParams    []ParameterData
+	HeaderParams   []ParameterData
+	RequestBody    *RequestBodyData
+	ResponseBody   *ResponseBodyData
+	SuccessCodes   []string
+	HasRequestBody bool
 }
 
 // ParameterData holds data for a single parameter.
@@ -112,10 +115,11 @@ type ResponseBodyData struct {
 
 // ResponseField holds info for one status code in the response container.
 type ResponseField struct {
-	StatusCode int
-	SchemaName string
-	GoType     string
-	ImportPath string
+	StatusCode   int
+	SchemaName   string
+	GoType       string
+	ImportPath   string
+	ContentTypes []string
 }
 
 func (g *Generator) buildTemplateData() *TemplateData {
@@ -140,6 +144,12 @@ func (g *Generator) buildTemplateData() *TemplateData {
 		}
 		if route.ResImport != "" {
 			usedImports[route.ResImport] = true
+		}
+		// MultiRespEntries may have their own imports
+		for _, entry := range route.MultiRespEntries {
+			if entry.ImportPath != "" {
+				usedImports[entry.ImportPath] = true
+			}
 		}
 	}
 
@@ -196,6 +206,7 @@ func (g *Generator) buildOperationData(route RouteInfo) *OperationData {
 
 	// Request body for POST/PUT/PATCH
 	if route.HasReqBody && route.ReqImport != "" {
+		od.HasRequestBody = true
 		od.RequestBody = &RequestBodyData{
 			Required:   true,
 			SchemaName: route.ReqType,
@@ -204,19 +215,77 @@ func (g *Generator) buildOperationData(route RouteInfo) *OperationData {
 		}
 	}
 
-	// Response body
-	if route.HasRespBody && route.ResImport != "" {
-		od.ResponseBody = &ResponseBodyData{
-			Fields: map[string]*ResponseField{
-				"200": {
-					StatusCode: 200,
-					SchemaName: route.ResType,
-					GoType:     g.typeRef(route.ResType, route.ResImport),
-					ImportPath: route.ResImport,
-				},
-			},
+	// Response body — collect all status codes
+	if route.HasRespBody {
+		fields := make(map[string]*ResponseField)
+		successCodes := make([]string, 0)
+
+		// NewRouteMultiResp: each entry has its own schema and import
+		if len(route.MultiRespEntries) > 0 {
+			for _, entry := range route.MultiRespEntries {
+				key := strconv.Itoa(entry.Status)
+				if _, exists := fields[key]; exists {
+					continue
+				}
+				ct := entry.ContentTypes
+				if len(ct) == 0 {
+					ct = []string{"application/json"}
+				}
+				fields[key] = &ResponseField{
+					StatusCode:   entry.Status,
+					SchemaName:   entry.SchemaName,
+					GoType:       g.typeRef(entry.SchemaName, entry.ImportPath),
+					ImportPath:   entry.ImportPath,
+					ContentTypes: ct,
+				}
+				successCodes = append(successCodes, key)
+			}
+		} else if len(route.ResponseStatuses) > 0 {
+			// NewRoute with explicit OnSuccess/OnNoContent/Response
+			for _, status := range route.ResponseStatuses {
+				key := strconv.Itoa(status)
+				if _, exists := fields[key]; exists {
+					continue
+				}
+
+				schemaName := route.ResType
+				if route.ResponseSchemas != nil {
+					if sn, ok := route.ResponseSchemas[status]; ok {
+						schemaName = sn
+					}
+				}
+				ct := []string{"application/json"}
+				if route.ResponseContentTypes != nil {
+					if cts, ok := route.ResponseContentTypes[status]; ok && len(cts) > 0 {
+						ct = cts
+					}
+				}
+
+				fields[key] = &ResponseField{
+					StatusCode:   status,
+					SchemaName:   schemaName,
+					GoType:       g.typeRef(schemaName, route.ResImport),
+					ImportPath:   route.ResImport,
+					ContentTypes: ct,
+				}
+				successCodes = append(successCodes, key)
+			}
+		} else if route.ResImport != "" {
+			// No explicit statuses — default to 200
+			fields["200"] = &ResponseField{
+				StatusCode:   200,
+				SchemaName:   route.ResType,
+				GoType:       g.typeRef(route.ResType, route.ResImport),
+				ImportPath:   route.ResImport,
+				ContentTypes: []string{"application/json"},
+			}
+			successCodes = append(successCodes, "200")
 		}
-		od.SuccessCodes = []string{"200"}
+
+		if len(fields) > 0 {
+			od.ResponseBody = &ResponseBodyData{Fields: fields}
+			od.SuccessCodes = successCodes
+		}
 	}
 
 	return od
@@ -264,6 +333,21 @@ func toGoName(name string) string {
 func toGoTypeName(name string) string {
 	if name == "" {
 		return "Object"
+	}
+	// Handle numeric status codes: "200" -> "Ok", "201" -> "Created", "404" -> "NotFound"
+	statusNames := map[string]string{
+		"200": "Ok",
+		"201": "Created",
+		"202": "Accepted",
+		"204": "NoContent",
+		"400": "BadRequest",
+		"401": "Unauthorized",
+		"403": "Forbidden",
+		"404": "NotFound",
+		"500": "InternalServerError",
+	}
+	if n, ok := statusNames[name]; ok {
+		return n
 	}
 	parts := strings.Split(name, ".")
 	last := parts[len(parts)-1]

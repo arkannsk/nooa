@@ -92,6 +92,18 @@ func TestGenerate_BasicTypes(t *testing.T) {
 	if strings.Contains(result, `"github.com/arkannsk/nooa"`) {
 		t.Error("should not import nooa library")
 	}
+	// Check new style: imports nooa/client for Codec
+	if !strings.Contains(result, `"github.com/arkannsk/nooa/client"`) {
+		t.Error("expected nooa/client import")
+	}
+	// Check new style: status field (lowercase, unexported)
+	if !strings.Contains(result, "status200") {
+		t.Error("expected unexported status200 field")
+	}
+	// Check new style: StatusOk method
+	if !strings.Contains(result, "StatusOk()") {
+		t.Error("expected StatusOk() method")
+	}
 }
 
 func TestGenerate_HttpParams(t *testing.T) {

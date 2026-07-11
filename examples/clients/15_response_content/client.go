@@ -5,12 +5,13 @@ package responsecontentdemo
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"bytes"
+	"encoding/json"
+	"strings"
+	"github.com/arkannsk/nooa/client"
 	responsecontent "github.com/arkannsk/nooa/examples/models/15_response_content"
 )
 
@@ -26,6 +27,10 @@ type Client struct {
 	HTTPClient  HTTPClient
 	Token       string
 	TokenPrefix string
+
+	// Codec maps Content-Type to client.Codec for response body decoding.
+	// If nil, defaults to JSON decoding for all types.
+	Codec map[string]client.Codec
 }
 
 // New creates a new Client.
@@ -53,12 +58,23 @@ type POSTCreateRequest struct {
 
 // POSTCreateResponse holds the response for POSTCreate.
 type POSTCreateResponse struct {
-	// Status 200 — response_content.CreateUserResponse
-	Status200 responsecontent.CreateUserResponse
-	// StatusCode is the HTTP status code.
-	StatusCode int
-	// RawBody is the raw response body.
-	RawBody []byte
+	*http.Response
+	client *Client
+	status201 *responsecontent.CreateUserResponse
+}
+
+func (r *POSTCreateResponse) StatusCreated() (*responsecontent.CreateUserResponse, error) {
+	if r.StatusCode != 201 {
+		return nil, fmt.Errorf("expected status 201, got %d", r.StatusCode)
+	}
+	if r.status201 != nil {
+		return r.status201, nil
+	}
+	r.status201 = new(responsecontent.CreateUserResponse)
+	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status201); err != nil {
+		return nil, err
+	}
+	return r.status201, nil
 }
 
 // POSTCreate — Create user
@@ -89,21 +105,10 @@ func (c *Client) POSTCreate(ctx context.Context, input *POSTCreateRequest) (*POS
 	if err != nil {
 		return nil, fmt.Errorf("do request: %w", err)
 	}
-	defer resp.Body.Close()
-
-	raw, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
-	}
 
 	result := &POSTCreateResponse{
-		StatusCode: resp.StatusCode,
-		RawBody:    raw,
-	}
-	if resp.StatusCode == 200 {
-		if err := json.Unmarshal(raw, &result.Status200); err != nil {
-			return result, fmt.Errorf("unmarshal status 200: %w", err)
-		}
+		Response: resp,
+		client:   c,
 	}
 	if resp.StatusCode >= 400 {
 		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
@@ -119,12 +124,23 @@ func (c *Client) POSTCreate(ctx context.Context, input *POSTCreateRequest) (*POS
 
 // POSTErrorResponse holds the response for POSTError.
 type POSTErrorResponse struct {
-	// Status 200 — response_content.ErrorResponse
-	Status200 responsecontent.ErrorResponse
-	// StatusCode is the HTTP status code.
-	StatusCode int
-	// RawBody is the raw response body.
-	RawBody []byte
+	*http.Response
+	client *Client
+	status200 *responsecontent.ErrorResponse
+}
+
+func (r *POSTErrorResponse) StatusOk() (*responsecontent.ErrorResponse, error) {
+	if r.StatusCode != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	}
+	if r.status200 != nil {
+		return r.status200, nil
+	}
+	r.status200 = new(responsecontent.ErrorResponse)
+	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
+		return nil, err
+	}
+	return r.status200, nil
 }
 
 // POSTError — Error response
@@ -146,21 +162,10 @@ func (c *Client) POSTError(ctx context.Context) (*POSTErrorResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("do request: %w", err)
 	}
-	defer resp.Body.Close()
-
-	raw, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
-	}
 
 	result := &POSTErrorResponse{
-		StatusCode: resp.StatusCode,
-		RawBody:    raw,
-	}
-	if resp.StatusCode == 200 {
-		if err := json.Unmarshal(raw, &result.Status200); err != nil {
-			return result, fmt.Errorf("unmarshal status 200: %w", err)
-		}
+		Response: resp,
+		client:   c,
 	}
 	if resp.StatusCode >= 400 {
 		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
@@ -176,12 +181,23 @@ func (c *Client) POSTError(ctx context.Context) (*POSTErrorResponse, error) {
 
 // GETMultiResponse holds the response for GETMulti.
 type GETMultiResponse struct {
-	// Status 200 — response_content.MultipleResponses
-	Status200 responsecontent.MultipleResponses
-	// StatusCode is the HTTP status code.
-	StatusCode int
-	// RawBody is the raw response body.
-	RawBody []byte
+	*http.Response
+	client *Client
+	status200 *responsecontent.MultipleResponses
+}
+
+func (r *GETMultiResponse) StatusOk() (*responsecontent.MultipleResponses, error) {
+	if r.StatusCode != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	}
+	if r.status200 != nil {
+		return r.status200, nil
+	}
+	r.status200 = new(responsecontent.MultipleResponses)
+	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
+		return nil, err
+	}
+	return r.status200, nil
 }
 
 // GETMulti — Multiple response codes
@@ -203,21 +219,10 @@ func (c *Client) GETMulti(ctx context.Context) (*GETMultiResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("do request: %w", err)
 	}
-	defer resp.Body.Close()
-
-	raw, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
-	}
 
 	result := &GETMultiResponse{
-		StatusCode: resp.StatusCode,
-		RawBody:    raw,
-	}
-	if resp.StatusCode == 200 {
-		if err := json.Unmarshal(raw, &result.Status200); err != nil {
-			return result, fmt.Errorf("unmarshal status 200: %w", err)
-		}
+		Response: resp,
+		client:   c,
 	}
 	if resp.StatusCode >= 400 {
 		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
@@ -233,12 +238,23 @@ func (c *Client) GETMulti(ctx context.Context) (*GETMultiResponse, error) {
 
 // GETNocontentResponse holds the response for GETNocontent.
 type GETNocontentResponse struct {
-	// Status 200 — response_content.NoContentType
-	Status200 responsecontent.NoContentType
-	// StatusCode is the HTTP status code.
-	StatusCode int
-	// RawBody is the raw response body.
-	RawBody []byte
+	*http.Response
+	client *Client
+	status200 *responsecontent.NoContentType
+}
+
+func (r *GETNocontentResponse) StatusOk() (*responsecontent.NoContentType, error) {
+	if r.StatusCode != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	}
+	if r.status200 != nil {
+		return r.status200, nil
+	}
+	r.status200 = new(responsecontent.NoContentType)
+	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
+		return nil, err
+	}
+	return r.status200, nil
 }
 
 // GETNocontent — No response annotation
@@ -260,21 +276,10 @@ func (c *Client) GETNocontent(ctx context.Context) (*GETNocontentResponse, error
 	if err != nil {
 		return nil, fmt.Errorf("do request: %w", err)
 	}
-	defer resp.Body.Close()
-
-	raw, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
-	}
 
 	result := &GETNocontentResponse{
-		StatusCode: resp.StatusCode,
-		RawBody:    raw,
-	}
-	if resp.StatusCode == 200 {
-		if err := json.Unmarshal(raw, &result.Status200); err != nil {
-			return result, fmt.Errorf("unmarshal status 200: %w", err)
-		}
+		Response: resp,
+		client:   c,
 	}
 	if resp.StatusCode >= 400 {
 		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
@@ -290,12 +295,23 @@ func (c *Client) GETNocontent(ctx context.Context) (*GETNocontentResponse, error
 
 // GETNomediaResponse holds the response for GETNomedia.
 type GETNomediaResponse struct {
-	// Status 200 — response_content.NoMediaTypes
-	Status200 responsecontent.NoMediaTypes
-	// StatusCode is the HTTP status code.
-	StatusCode int
-	// RawBody is the raw response body.
-	RawBody []byte
+	*http.Response
+	client *Client
+	status204 *responsecontent.NoMediaTypes
+}
+
+func (r *GETNomediaResponse) StatusNoContent() (*responsecontent.NoMediaTypes, error) {
+	if r.StatusCode != 204 {
+		return nil, fmt.Errorf("expected status 204, got %d", r.StatusCode)
+	}
+	if r.status204 != nil {
+		return r.status204, nil
+	}
+	r.status204 = new(responsecontent.NoMediaTypes)
+	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status204); err != nil {
+		return nil, err
+	}
+	return r.status204, nil
 }
 
 // GETNomedia — No media types
@@ -317,21 +333,10 @@ func (c *Client) GETNomedia(ctx context.Context) (*GETNomediaResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("do request: %w", err)
 	}
-	defer resp.Body.Close()
-
-	raw, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
-	}
 
 	result := &GETNomediaResponse{
-		StatusCode: resp.StatusCode,
-		RawBody:    raw,
-	}
-	if resp.StatusCode == 200 {
-		if err := json.Unmarshal(raw, &result.Status200); err != nil {
-			return result, fmt.Errorf("unmarshal status 200: %w", err)
-		}
+		Response: resp,
+		client:   c,
 	}
 	if resp.StatusCode >= 400 {
 		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
@@ -347,12 +352,23 @@ func (c *Client) GETNomedia(ctx context.Context) (*GETNomediaResponse, error) {
 
 // GETUserResponse holds the response for GETUser.
 type GETUserResponse struct {
-	// Status 200 — response_content.UserResponse
-	Status200 responsecontent.UserResponse
-	// StatusCode is the HTTP status code.
-	StatusCode int
-	// RawBody is the raw response body.
-	RawBody []byte
+	*http.Response
+	client *Client
+	status200 *responsecontent.UserResponse
+}
+
+func (r *GETUserResponse) StatusOk() (*responsecontent.UserResponse, error) {
+	if r.StatusCode != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	}
+	if r.status200 != nil {
+		return r.status200, nil
+	}
+	r.status200 = new(responsecontent.UserResponse)
+	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
+		return nil, err
+	}
+	return r.status200, nil
 }
 
 // GETUser — Get user response
@@ -374,21 +390,10 @@ func (c *Client) GETUser(ctx context.Context) (*GETUserResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("do request: %w", err)
 	}
-	defer resp.Body.Close()
-
-	raw, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
-	}
 
 	result := &GETUserResponse{
-		StatusCode: resp.StatusCode,
-		RawBody:    raw,
-	}
-	if resp.StatusCode == 200 {
-		if err := json.Unmarshal(raw, &result.Status200); err != nil {
-			return result, fmt.Errorf("unmarshal status 200: %w", err)
-		}
+		Response: resp,
+		client:   c,
 	}
 	if resp.StatusCode >= 400 {
 		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)

@@ -6,17 +6,18 @@ package {{ .Package }}
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 {{- if .HasQueryParams }}
 	"net/url"
 {{- end }}
-	"strings"
 {{- if .HasRequestBody }}
 	"bytes"
+	"encoding/json"
 {{- end }}
+	"strings"
+	"github.com/arkannsk/nooa/client"
 {{- range .Imports }}
 {{- $alias := index $.PackageAliases . }}
 {{- if $alias }}
@@ -27,10 +28,19 @@ import (
 {{- end }}
 )
 
-// HTTPClient is the interface that wraps the Do method.
-// It is compatible with *http.Client and useful for testing.
+// HTTPClient is the interface for executing HTTP requests.
+// It accepts a context for cancellation and timeouts.
 type HTTPClient interface {
-	Do(req *http.Request) (*http.Response, error)
+	Do(ctx context.Context, req *http.Request) (*http.Response, error)
+}
+
+// stdHTTPClient wraps *http.Client to satisfy HTTPClient.
+type stdHTTPClient struct {
+	*http.Client
+}
+
+func (s *stdHTTPClient) Do(ctx context.Context, req *http.Request) (*http.Response, error) {
+	return s.Client.Do(req.WithContext(ctx))
 }
 
 // Client is the generated HTTP client for {{ .Title }}.
@@ -39,16 +49,30 @@ type Client struct {
 	HTTPClient  HTTPClient
 	Token       string
 	TokenPrefix string
+
+	// Codec maps Content-Type to client.Codec for response body decoding.
+	// If nil, defaults to JSON decoding for all types.
+	Codec map[string]client.Codec
 }
 
 // New creates a new Client.
-func New(baseURL string, hc HTTPClient) *Client {
-	if hc == nil {
-		hc = &http.Client{}
+// If hc is nil, a default *http.Client is used.
+// If hc is *http.Client, it is automatically wrapped.
+func New(baseURL string, hc any) *Client {
+	var client HTTPClient
+	switch v := hc.(type) {
+	case nil:
+		client = &stdHTTPClient{Client: &http.Client{}}
+	case *http.Client:
+		client = &stdHTTPClient{Client: v}
+	case HTTPClient:
+		client = v
+	default:
+		client = &stdHTTPClient{Client: &http.Client{}}
 	}
 	return &Client{
 		BaseURL:     strings.TrimRight(baseURL, "/"),
-		HTTPClient:  hc,
+		HTTPClient:  client,
 		TokenPrefix: "Bearer",
 	}
 }
