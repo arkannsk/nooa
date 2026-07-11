@@ -32,10 +32,8 @@ func (s *stdHTTPClient) Do(ctx context.Context, req *http.Request) (*http.Respon
 
 // Client is the generated HTTP client for 15 Response Content Demo.
 type Client struct {
-	BaseURL     string
-	HTTPClient  HTTPClient
-	Token       string
-	TokenPrefix string
+	BaseURL    string
+	HTTPClient HTTPClient
 
 	// Codec maps Content-Type to client.Codec for response body decoding.
 	// If nil, defaults to JSON decoding for all types.
@@ -58,9 +56,8 @@ func New(baseURL string, hc any) *Client {
 		client = &stdHTTPClient{Client: &http.Client{}}
 	}
 	return &Client{
-		BaseURL:     strings.TrimRight(baseURL, "/"),
-		HTTPClient:  client,
-		TokenPrefix: "Bearer",
+		BaseURL:    strings.TrimRight(baseURL, "/"),
+		HTTPClient: client,
 	}
 }
 
@@ -116,9 +113,6 @@ func (c *Client) POSTCreate(ctx context.Context, input *POSTCreateRequest) (*POS
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
-	if c.Token != "" {
-		httpReq.Header.Set("Authorization", c.TokenPrefix+" "+c.Token)
-	}
 
 	resp, err := c.HTTPClient.Do(ctx, httpReq)
 	if err != nil {
@@ -172,9 +166,6 @@ func (c *Client) POSTError(ctx context.Context) (*POSTErrorResponse, error) {
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", u, body)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
-	}
-	if c.Token != "" {
-		httpReq.Header.Set("Authorization", c.TokenPrefix+" "+c.Token)
 	}
 
 	resp, err := c.HTTPClient.Do(ctx, httpReq)
@@ -230,9 +221,6 @@ func (c *Client) GETMulti(ctx context.Context) (*GETMultiResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
-	if c.Token != "" {
-		httpReq.Header.Set("Authorization", c.TokenPrefix+" "+c.Token)
-	}
 
 	resp, err := c.HTTPClient.Do(ctx, httpReq)
 	if err != nil {
@@ -286,9 +274,6 @@ func (c *Client) GETNocontent(ctx context.Context) (*GETNocontentResponse, error
 	httpReq, err := http.NewRequestWithContext(ctx, "GET", u, body)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
-	}
-	if c.Token != "" {
-		httpReq.Header.Set("Authorization", c.TokenPrefix+" "+c.Token)
 	}
 
 	resp, err := c.HTTPClient.Do(ctx, httpReq)
@@ -344,9 +329,6 @@ func (c *Client) GETNomedia(ctx context.Context) (*GETNomediaResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
-	if c.Token != "" {
-		httpReq.Header.Set("Authorization", c.TokenPrefix+" "+c.Token)
-	}
 
 	resp, err := c.HTTPClient.Do(ctx, httpReq)
 	if err != nil {
@@ -400,9 +382,6 @@ func (c *Client) GETUser(ctx context.Context) (*GETUserResponse, error) {
 	httpReq, err := http.NewRequestWithContext(ctx, "GET", u, body)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
-	}
-	if c.Token != "" {
-		httpReq.Header.Set("Authorization", c.TokenPrefix+" "+c.Token)
 	}
 
 	resp, err := c.HTTPClient.Do(ctx, httpReq)

@@ -32,10 +32,8 @@ func (s *stdHTTPClient) Do(ctx context.Context, req *http.Request) (*http.Respon
 
 // Client is the generated HTTP client for 08 HTTP Parameters Demo.
 type Client struct {
-	BaseURL     string
-	HTTPClient  HTTPClient
-	Token       string
-	TokenPrefix string
+	BaseURL    string
+	HTTPClient HTTPClient
 
 	// Codec maps Content-Type to client.Codec for response body decoding.
 	// If nil, defaults to JSON decoding for all types.
@@ -58,9 +56,8 @@ func New(baseURL string, hc any) *Client {
 		client = &stdHTTPClient{Client: &http.Client{}}
 	}
 	return &Client{
-		BaseURL:     strings.TrimRight(baseURL, "/"),
-		HTTPClient:  client,
-		TokenPrefix: "Bearer",
+		BaseURL:    strings.TrimRight(baseURL, "/"),
+		HTTPClient: client,
 	}
 }
 
@@ -116,9 +113,6 @@ func (c *Client) POSTHeaderdemo(ctx context.Context, input *POSTHeaderdemoReques
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
-	if c.Token != "" {
-		httpReq.Header.Set("Authorization", c.TokenPrefix+" "+c.Token)
-	}
 
 	resp, err := c.HTTPClient.Do(ctx, httpReq)
 	if err != nil {
@@ -184,9 +178,6 @@ func (c *Client) GETItemsId(ctx context.Context, input *GETItemsIdRequest) (*GET
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
-	if c.Token != "" {
-		httpReq.Header.Set("Authorization", c.TokenPrefix+" "+c.Token)
-	}
 
 	resp, err := c.HTTPClient.Do(ctx, httpReq)
 	if err != nil {
@@ -240,9 +231,6 @@ func (c *Client) GETSearch(ctx context.Context) (*GETSearchResponse, error) {
 	httpReq, err := http.NewRequestWithContext(ctx, "GET", u, body)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
-	}
-	if c.Token != "" {
-		httpReq.Header.Set("Authorization", c.TokenPrefix+" "+c.Token)
 	}
 
 	resp, err := c.HTTPClient.Do(ctx, httpReq)
@@ -323,9 +311,6 @@ func (c *Client) PUTUsersUserIdResourcesResourceid(ctx context.Context, input *P
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
-	if c.Token != "" {
-		httpReq.Header.Set("Authorization", c.TokenPrefix+" "+c.Token)
-	}
 
 	resp, err := c.HTTPClient.Do(ctx, httpReq)
 	if err != nil {

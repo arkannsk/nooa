@@ -30,10 +30,8 @@ func (s *stdHTTPClient) Do(ctx context.Context, req *http.Request) (*http.Respon
 
 // Client is the generated HTTP client for 11 Edge Cases Demo.
 type Client struct {
-	BaseURL     string
-	HTTPClient  HTTPClient
-	Token       string
-	TokenPrefix string
+	BaseURL    string
+	HTTPClient HTTPClient
 
 	// Codec maps Content-Type to client.Codec for response body decoding.
 	// If nil, defaults to JSON decoding for all types.
@@ -56,9 +54,8 @@ func New(baseURL string, hc any) *Client {
 		client = &stdHTTPClient{Client: &http.Client{}}
 	}
 	return &Client{
-		BaseURL:     strings.TrimRight(baseURL, "/"),
-		HTTPClient:  client,
-		TokenPrefix: "Bearer",
+		BaseURL:    strings.TrimRight(baseURL, "/"),
+		HTTPClient: client,
 	}
 }
 
@@ -98,9 +95,6 @@ func (c *Client) GETCircular(ctx context.Context) (*GETCircularResponse, error) 
 	httpReq, err := http.NewRequestWithContext(ctx, "GET", u, body)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
-	}
-	if c.Token != "" {
-		httpReq.Header.Set("Authorization", c.TokenPrefix+" "+c.Token)
 	}
 
 	resp, err := c.HTTPClient.Do(ctx, httpReq)
@@ -156,9 +150,6 @@ func (c *Client) GETEmpty(ctx context.Context) (*GETEmptyResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
-	if c.Token != "" {
-		httpReq.Header.Set("Authorization", c.TokenPrefix+" "+c.Token)
-	}
 
 	resp, err := c.HTTPClient.Do(ctx, httpReq)
 	if err != nil {
@@ -212,9 +203,6 @@ func (c *Client) GETOneof(ctx context.Context) (*GETOneofResponse, error) {
 	httpReq, err := http.NewRequestWithContext(ctx, "GET", u, body)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
-	}
-	if c.Token != "" {
-		httpReq.Header.Set("Authorization", c.TokenPrefix+" "+c.Token)
 	}
 
 	resp, err := c.HTTPClient.Do(ctx, httpReq)
@@ -270,9 +258,6 @@ func (c *Client) GETPointerchain(ctx context.Context) (*GETPointerchainResponse,
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
-	if c.Token != "" {
-		httpReq.Header.Set("Authorization", c.TokenPrefix+" "+c.Token)
-	}
 
 	resp, err := c.HTTPClient.Do(ctx, httpReq)
 	if err != nil {
@@ -326,9 +311,6 @@ func (c *Client) GETUntypednil(ctx context.Context) (*GETUntypednilResponse, err
 	httpReq, err := http.NewRequestWithContext(ctx, "GET", u, body)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
-	}
-	if c.Token != "" {
-		httpReq.Header.Set("Authorization", c.TokenPrefix+" "+c.Token)
 	}
 
 	resp, err := c.HTTPClient.Do(ctx, httpReq)

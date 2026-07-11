@@ -134,9 +134,6 @@ func (c *Client) {{ .MethodName }}(ctx context.Context{{ if $hasParams }}, input
 	}
 	{{- end }}
 {{- end }}
-	if c.Token != "" {
-		httpReq.Header.Set("Authorization", c.TokenPrefix+" "+c.Token)
-	}
 
 	resp, err := c.HTTPClient.Do(ctx, httpReq)
 	if err != nil {
