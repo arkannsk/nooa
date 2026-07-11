@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"bytes"
 	"encoding/json"
-	"strings"
 	"github.com/arkannsk/nooa/client"
 	customtypes "github.com/arkannsk/nooa/examples/models/12_custom_types"
 )
@@ -66,12 +66,6 @@ func New(baseURL string, hc any) *Client {
 // POST /aliases
 
 
-// POSTAliasesRequest holds parameters for POSTAliases.
-type POSTAliasesRequest struct {
-	// Body is the request body.
-	Body customtypes.WithAliases
-}
-
 // POSTAliasesResponse holds the response for POSTAliases.
 type POSTAliasesResponse struct {
 	*http.Response
@@ -94,19 +88,19 @@ func (r *POSTAliasesResponse) StatusOk() (*customtypes.WithAliases, error) {
 }
 
 // POSTAliases — Type aliases with validation
-func (c *Client) POSTAliases(ctx context.Context, input *POSTAliasesRequest) (*POSTAliasesResponse, error) {
+// POST /aliases
+func (c *Client) POSTAliases(ctx context.Context, input *customtypes.WithAliases) (*POSTAliasesResponse, error) {
 
 	u := c.BaseURL + "/aliases"
 
-	var body io.Reader
 
-	if input != nil {
-		b, err := json.Marshal(input.Body)
-		if err != nil {
-			return nil, fmt.Errorf("marshal request body: %w", err)
-		}
-		body = bytes.NewReader(b)
+
+	var body io.Reader
+	b, err := json.Marshal(input)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request body: %w", err)
 	}
+	body = bytes.NewReader(b)
 
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", u, body)
 	if err != nil {
@@ -119,14 +113,14 @@ func (c *Client) POSTAliases(ctx context.Context, input *POSTAliasesRequest) (*P
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &POSTAliasesResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &POSTAliasesResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 
@@ -134,12 +128,6 @@ func (c *Client) POSTAliases(ctx context.Context, input *POSTAliasesRequest) (*P
 // Custom reader as file
 // POST /custom-reader
 
-
-// POSTCustomreaderRequest holds parameters for POSTCustomreader.
-type POSTCustomreaderRequest struct {
-	// Body is the request body.
-	Body customtypes.WithCustomReader
-}
 
 // POSTCustomreaderResponse holds the response for POSTCustomreader.
 type POSTCustomreaderResponse struct {
@@ -163,19 +151,19 @@ func (r *POSTCustomreaderResponse) StatusOk() (*customtypes.WithCustomReader, er
 }
 
 // POSTCustomreader — Custom reader as file
-func (c *Client) POSTCustomreader(ctx context.Context, input *POSTCustomreaderRequest) (*POSTCustomreaderResponse, error) {
+// POST /custom-reader
+func (c *Client) POSTCustomreader(ctx context.Context, input *customtypes.WithCustomReader) (*POSTCustomreaderResponse, error) {
 
 	u := c.BaseURL + "/custom-reader"
 
-	var body io.Reader
 
-	if input != nil {
-		b, err := json.Marshal(input.Body)
-		if err != nil {
-			return nil, fmt.Errorf("marshal request body: %w", err)
-		}
-		body = bytes.NewReader(b)
+
+	var body io.Reader
+	b, err := json.Marshal(input)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request body: %w", err)
 	}
+	body = bytes.NewReader(b)
 
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", u, body)
 	if err != nil {
@@ -188,14 +176,14 @@ func (c *Client) POSTCustomreader(ctx context.Context, input *POSTCustomreaderRe
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &POSTCustomreaderResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &POSTCustomreaderResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 
@@ -226,9 +214,12 @@ func (r *GETEmbedResponse) StatusOk() (*customtypes.WithEmbed, error) {
 }
 
 // GETEmbed — Embedded struct
-func (c *Client) GETEmbed(ctx context.Context) (*GETEmbedResponse, error) {
+// GET /embed
+func (c *Client) GETEmbed(ctx context.Context, input *customtypes.WithEmbed) (*GETEmbedResponse, error) {
 
 	u := c.BaseURL + "/embed"
+
+
 
 	var body io.Reader
 
@@ -242,14 +233,14 @@ func (c *Client) GETEmbed(ctx context.Context) (*GETEmbedResponse, error) {
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &GETEmbedResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &GETEmbedResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 

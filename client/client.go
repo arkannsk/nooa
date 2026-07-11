@@ -6,12 +6,14 @@
 package client
 
 import (
+	"bytes"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io"
 	"mime"
 	"net/http"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -106,4 +108,45 @@ func UnmarshalResponse(resp *http.Response, codecs map[string]Codec, v any) erro
 		return fmt.Errorf("unmarshal response (%s): %w", mediaType, err)
 	}
 	return nil
+}
+
+// --- Request option pattern ---
+
+// RequestOption modifies an HTTP request before it is sent.
+// Use WithBody, WithQuery, WithHeader, WithPath to configure a request.
+type RequestOption func(*http.Request)
+
+// WithBody sets the request body (JSON-encoded).
+func WithBody(v any) RequestOption {
+	return func(r *http.Request) {
+		b, err := json.Marshal(v)
+		if err != nil {
+			return
+		}
+		r.Body = io.NopCloser(bytes.NewReader(b))
+		r.Header.Set("Content-Type", "application/json")
+	}
+}
+
+// WithQuery adds a query parameter.
+func WithQuery(key string, value any) RequestOption {
+	return func(r *http.Request) {
+		q := r.URL.Query()
+		q.Set(key, fmt.Sprintf("%v", value))
+		r.URL.RawQuery = q.Encode()
+	}
+}
+
+// WithHeader sets a request header.
+func WithHeader(key, value string) RequestOption {
+	return func(r *http.Request) {
+		r.Header.Set(key, value)
+	}
+}
+
+// WithPath substitutes a path placeholder {key} with the given value.
+func WithPath(key string, value any) RequestOption {
+	return func(r *http.Request) {
+		r.URL.Path = strings.ReplaceAll(r.URL.Path, "{"+key+"}", fmt.Sprintf("%v", value))
+	}
 }

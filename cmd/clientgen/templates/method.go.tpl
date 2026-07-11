@@ -3,45 +3,13 @@
 {{- $hasParams := false }}
 {{- if .QueryParams }}{{ $hasParams = true }}{{ end }}
 {{- if .HeaderParams }}{{ $hasParams = true }}{{ end }}
-{{- if .RequestBody }}{{ $hasParams = true }}{{ end }}
 {{- if .PathParams }}{{ $hasParams = true }}{{ end }}
 
 {{- $hasResponse := false }}
 {{- if .ResponseBody }}{{ $hasResponse = true }}{{ end }}
 
-{{- if $hasParams }}
-
-// {{ .MethodName }}Request holds parameters for {{ .MethodName }}.
-type {{ .MethodName }}Request struct {
-{{- if .RequestBody }}
-	// Body is the request body.
-	Body {{ .RequestBody.GoType }}
-{{- end }}
-{{- range .QueryParams }}
-	// {{ .Name }} — {{ .Description }}
-{{- if .Required }}
-	{{ toGoName .Name }} {{ .GoType }}
-{{- else }}
-	{{ toGoName .Name }} {{ .GoType }}
-	{{ toGoName .Name }}Set bool
-{{- end }}
-{{- end }}
-{{- range .HeaderParams }}
-	// {{ .Name }} — {{ .Description }}
-{{- if .Required }}
-	{{ toGoName .Name }} {{ .GoType }}
-{{- else }}
-	{{ toGoName .Name }} {{ .GoType }}
-	{{ toGoName .Name }}Set bool
-{{- end }}
-{{- end }}
-{{- range .PathParams }}
-	// {{ .Name }} — {{ .Description }} (path parameter)
-	{{ toGoName .Name }} {{ .GoType }}
-{{- end }}
-}
-
-{{- end }}
+{{- $usesModel := .UsesModelAsInput }}
+{{- $inputGoType := .ModelInputGoType }}
 
 {{- if $hasResponse }}
 
@@ -73,9 +41,40 @@ func (r *{{ $.MethodName }}Response) Status{{ toGoTypeName $code }}() (*{{ $fiel
 {{- end }}
 {{- end }}
 
+{{- if and $hasParams (not $usesModel) }}
+
+// {{ .MethodName }}Request holds parameters for {{ .MethodName }}.
+type {{ .MethodName }}Request struct {
+{{- range .QueryParams }}
+	// {{ .Name }} — {{ .Description }}
+{{- if .Required }}
+	{{ toGoName .Name }} {{ .GoType }}
+{{- else }}
+	{{ toGoName .Name }} {{ .GoType }}
+	{{ toGoName .Name }}Set bool
+{{- end }}
+{{- end }}
+{{- range .HeaderParams }}
+	// {{ .Name }} — {{ .Description }}
+{{- if .Required }}
+	{{ toGoName .Name }} {{ .GoType }}
+{{- else }}
+	{{ toGoName .Name }} {{ .GoType }}
+	{{ toGoName .Name }}Set bool
+{{- end }}
+{{- end }}
+{{- range .PathParams }}
+	// {{ .Name }} — {{ .Description }} (path parameter)
+	{{ toGoName .Name }} {{ .GoType }}
+{{- end }}
+}
+
+{{- end }}
+
 // {{ .MethodName }} — {{ .Summary }}
-func (c *Client) {{ .MethodName }}(ctx context.Context{{ if $hasParams }}, input *{{ .MethodName }}Request{{ end }}) {{ if $hasResponse }}(*{{ .MethodName }}Response, error){{ else }}error{{ end }} {
-{{- if .PathParams }}
+// {{ .Method }} {{ .Path }}
+func (c *Client) {{ .MethodName }}(ctx context.Context{{ if $usesModel }}, input *{{ $inputGoType }}{{ else if $hasParams }}, input *{{ .MethodName }}Request{{ else }}, opts ...client.RequestOption{{ end }}) {{ if $hasResponse }}(*{{ .MethodName }}Response, error){{ else }}error{{ end }} {
+{{- if and $hasParams .PathParams }}
 
 	if input == nil {
 		return {{ if $hasResponse }}nil, {{ end }}fmt.Errorf("input is required")
@@ -83,38 +82,56 @@ func (c *Client) {{ .MethodName }}(ctx context.Context{{ if $hasParams }}, input
 {{- end }}
 
 	u := c.BaseURL + {{ .Path | printf "%q" }}
-{{- range .PathParams }}
+{{- if or $hasParams $usesModel }}
 
-	{{- $pname := toGoName .Name }}
+{{ range .PathParams }}
+
+	{{ if $usesModel }}
+	u = strings.ReplaceAll(u, "{{ printf "{%s}" .Name }}", fmt.Sprintf("%v", input.{{ .GoFieldName }}))
+	{{ else }}
+	{{ $pname := toGoName .Name }}
 	u = strings.ReplaceAll(u, "{{ printf "{%s}" .Name }}", fmt.Sprintf("%v", input.{{ $pname }}))
-{{- end }}
+	{{ end }}
+{{ end }}
 
 {{- if .QueryParams }}
-
 	// Query parameters
 	query := url.Values{}
 	{{- range .QueryParams }}
 
+	{{- if $usesModel }}
+	query.Set("{{ .Name }}", fmt.Sprintf("%v", input.{{ .GoFieldName }}))
+	{{- else }}
 	{{- $pname := toGoName .Name }}
-	if input != nil && input.{{ $pname }}Set {
+	if input.{{ $pname }}Set {
 		query.Set("{{ .Name }}", fmt.Sprintf("%v", input.{{ $pname }}))
 	}
+	{{- end }}
 	{{- end }}
 	if len(query) > 0 {
 		u += "?" + query.Encode()
 	}
 {{- end }}
+{{- end }}
 
 	var body io.Reader
 {{- if .RequestBody }}
 
+{{- if $usesModel }}
+	b, err := json.Marshal(input)
+	if err != nil {
+		return {{ if $hasResponse }}nil, {{ end }}fmt.Errorf("marshal request body: %w", err)
+	}
+	body = bytes.NewReader(b)
+{{- else }}
 	if input != nil {
-		b, err := json.Marshal(input.Body)
+		b, err := json.Marshal(input)
 		if err != nil {
 			return {{ if $hasResponse }}nil, {{ end }}fmt.Errorf("marshal request body: %w", err)
 		}
 		body = bytes.NewReader(b)
 	}
+{{- end }}
 {{- end }}
 
 	httpReq, err := http.NewRequestWithContext(ctx, "{{ .Method }}", u, body)
@@ -124,15 +141,30 @@ func (c *Client) {{ .MethodName }}(ctx context.Context{{ if $hasParams }}, input
 {{- if .RequestBody }}
 	httpReq.Header.Set("Content-Type", "application/json")
 {{- end }}
+{{- if $usesModel }}
+{{- if .HeaderParams }}
+
+	{{- range .HeaderParams }}
+
+	httpReq.Header.Set("{{ .Name }}", fmt.Sprintf("%v", input.{{ .GoFieldName }}))
+	{{- end }}
+{{- end }}
+{{- else if $hasParams }}
 {{- if .HeaderParams }}
 
 	{{- range .HeaderParams }}
 
 	{{- $pname := toGoName .Name }}
-	if input != nil && input.{{ $pname }}Set {
+	if input.{{ $pname }}Set {
 		httpReq.Header.Set("{{ .Name }}", fmt.Sprintf("%v", input.{{ $pname }}))
 	}
 	{{- end }}
+{{- end }}
+{{- else }}
+	// Apply options
+	for _, opt := range opts {
+		opt(httpReq)
+	}
 {{- end }}
 
 	resp, err := c.HTTPClient.Do(ctx, httpReq)
@@ -140,23 +172,17 @@ func (c *Client) {{ .MethodName }}(ctx context.Context{{ if $hasParams }}, input
 		return {{ if $hasResponse }}nil, {{ end }}fmt.Errorf("do request: %w", err)
 	}
 
-{{- if $hasResponse }}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return {{ if $hasResponse }}nil, {{ end }}fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
 
-	result := &{{ .MethodName }}Response{
+{{- if $hasResponse }}
+	return &{{ .MethodName }}Response{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 {{- else }}
-
-	if resp.StatusCode >= 400 {
-		_ = resp.Body.Close()
-		return fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	_ = resp.Body.Close()
 	return nil
 {{- end }}
 }

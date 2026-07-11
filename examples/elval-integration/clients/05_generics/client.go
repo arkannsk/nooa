@@ -86,9 +86,12 @@ func (r *GETCustomgenericResponse) StatusOk() (*generics.WithCustomGeneric, erro
 }
 
 // GETCustomgeneric — Get custom generic struct
-func (c *Client) GETCustomgeneric(ctx context.Context) (*GETCustomgenericResponse, error) {
+// GET /custom-generic
+func (c *Client) GETCustomgeneric(ctx context.Context, input *generics.WithCustomGeneric) (*GETCustomgenericResponse, error) {
 
 	u := c.BaseURL + "/custom-generic"
+
+
 
 	var body io.Reader
 
@@ -102,14 +105,14 @@ func (c *Client) GETCustomgeneric(ctx context.Context) (*GETCustomgenericRespons
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &GETCustomgenericResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &GETCustomgenericResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 
@@ -140,9 +143,12 @@ func (r *GETGenericResponse) StatusOk() (*generics.GenericStruct, error) {
 }
 
 // GETGeneric — Get generic struct
-func (c *Client) GETGeneric(ctx context.Context) (*GETGenericResponse, error) {
+// GET /generic
+func (c *Client) GETGeneric(ctx context.Context, input *generics.GenericStruct) (*GETGenericResponse, error) {
 
 	u := c.BaseURL + "/generic"
+
+
 
 	var body io.Reader
 
@@ -156,14 +162,14 @@ func (c *Client) GETGeneric(ctx context.Context) (*GETGenericResponse, error) {
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &GETGenericResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &GETGenericResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 

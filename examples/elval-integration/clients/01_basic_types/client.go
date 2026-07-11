@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"bytes"
 	"encoding/json"
-	"strings"
 	"github.com/arkannsk/nooa/client"
 	basictypes "github.com/arkannsk/nooa/examples/models/01_basic_types"
 )
@@ -66,12 +66,6 @@ func New(baseURL string, hc any) *Client {
 // POST /defaults
 
 
-// POSTDefaultsRequest holds parameters for POSTDefaults.
-type POSTDefaultsRequest struct {
-	// Body is the request body.
-	Body basictypes.WithDefaults
-}
-
 // POSTDefaultsResponse holds the response for POSTDefaults.
 type POSTDefaultsResponse struct {
 	*http.Response
@@ -94,19 +88,19 @@ func (r *POSTDefaultsResponse) StatusCreated() (*basictypes.WithDefaults, error)
 }
 
 // POSTDefaults — Create with default values
-func (c *Client) POSTDefaults(ctx context.Context, input *POSTDefaultsRequest) (*POSTDefaultsResponse, error) {
+// POST /defaults
+func (c *Client) POSTDefaults(ctx context.Context, input *basictypes.WithDefaults) (*POSTDefaultsResponse, error) {
 
 	u := c.BaseURL + "/defaults"
 
-	var body io.Reader
 
-	if input != nil {
-		b, err := json.Marshal(input.Body)
-		if err != nil {
-			return nil, fmt.Errorf("marshal request body: %w", err)
-		}
-		body = bytes.NewReader(b)
+
+	var body io.Reader
+	b, err := json.Marshal(input)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request body: %w", err)
 	}
+	body = bytes.NewReader(b)
 
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", u, body)
 	if err != nil {
@@ -119,14 +113,14 @@ func (c *Client) POSTDefaults(ctx context.Context, input *POSTDefaultsRequest) (
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &POSTDefaultsResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &POSTDefaultsResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 
@@ -157,9 +151,12 @@ func (r *GETPointersResponse) StatusOk() (*basictypes.WithPointers, error) {
 }
 
 // GETPointers — Get nullable pointer fields
-func (c *Client) GETPointers(ctx context.Context) (*GETPointersResponse, error) {
+// GET /pointers
+func (c *Client) GETPointers(ctx context.Context, input *basictypes.WithPointers) (*GETPointersResponse, error) {
 
 	u := c.BaseURL + "/pointers"
+
+
 
 	var body io.Reader
 
@@ -173,14 +170,14 @@ func (c *Client) GETPointers(ctx context.Context) (*GETPointersResponse, error) 
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &GETPointersResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &GETPointersResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 
@@ -188,12 +185,6 @@ func (c *Client) GETPointers(ctx context.Context) (*GETPointersResponse, error) 
 // Create with primitive types
 // POST /primitives
 
-
-// POSTPrimitivesRequest holds parameters for POSTPrimitives.
-type POSTPrimitivesRequest struct {
-	// Body is the request body.
-	Body basictypes.SimplePrimitives
-}
 
 // POSTPrimitivesResponse holds the response for POSTPrimitives.
 type POSTPrimitivesResponse struct {
@@ -217,19 +208,19 @@ func (r *POSTPrimitivesResponse) StatusCreated() (*basictypes.SimplePrimitives, 
 }
 
 // POSTPrimitives — Create with primitive types
-func (c *Client) POSTPrimitives(ctx context.Context, input *POSTPrimitivesRequest) (*POSTPrimitivesResponse, error) {
+// POST /primitives
+func (c *Client) POSTPrimitives(ctx context.Context, input *basictypes.SimplePrimitives) (*POSTPrimitivesResponse, error) {
 
 	u := c.BaseURL + "/primitives"
 
-	var body io.Reader
 
-	if input != nil {
-		b, err := json.Marshal(input.Body)
-		if err != nil {
-			return nil, fmt.Errorf("marshal request body: %w", err)
-		}
-		body = bytes.NewReader(b)
+
+	var body io.Reader
+	b, err := json.Marshal(input)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request body: %w", err)
 	}
+	body = bytes.NewReader(b)
 
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", u, body)
 	if err != nil {
@@ -242,14 +233,14 @@ func (c *Client) POSTPrimitives(ctx context.Context, input *POSTPrimitivesReques
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &POSTPrimitivesResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &POSTPrimitivesResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 

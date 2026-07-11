@@ -86,9 +86,12 @@ func (r *GETCircleResponse) StatusOk() (*polymorphism.CircleShape, error) {
 }
 
 // GETCircle — Get circle shape
-func (c *Client) GETCircle(ctx context.Context) (*GETCircleResponse, error) {
+// GET /circle
+func (c *Client) GETCircle(ctx context.Context, input *polymorphism.CircleShape) (*GETCircleResponse, error) {
 
 	u := c.BaseURL + "/circle"
+
+
 
 	var body io.Reader
 
@@ -102,14 +105,14 @@ func (c *Client) GETCircle(ctx context.Context) (*GETCircleResponse, error) {
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &GETCircleResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &GETCircleResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 
@@ -140,9 +143,12 @@ func (r *GETContainerResponse) StatusOk() (*polymorphism.Container, error) {
 }
 
 // GETContainer — Get container with shape
-func (c *Client) GETContainer(ctx context.Context) (*GETContainerResponse, error) {
+// GET /container
+func (c *Client) GETContainer(ctx context.Context, input *polymorphism.Container) (*GETContainerResponse, error) {
 
 	u := c.BaseURL + "/container"
+
+
 
 	var body io.Reader
 
@@ -156,14 +162,14 @@ func (c *Client) GETContainer(ctx context.Context) (*GETContainerResponse, error
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &GETContainerResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &GETContainerResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 
@@ -194,9 +200,12 @@ func (r *GETOneofResponse) StatusOk() (*polymorphism.OneOfExample, error) {
 }
 
 // GETOneof — Get oneOf example
-func (c *Client) GETOneof(ctx context.Context) (*GETOneofResponse, error) {
+// GET /oneof
+func (c *Client) GETOneof(ctx context.Context, input *polymorphism.OneOfExample) (*GETOneofResponse, error) {
 
 	u := c.BaseURL + "/oneof"
+
+
 
 	var body io.Reader
 
@@ -210,14 +219,14 @@ func (c *Client) GETOneof(ctx context.Context) (*GETOneofResponse, error) {
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &GETOneofResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &GETOneofResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 
@@ -248,9 +257,12 @@ func (r *GETRectangleResponse) StatusOk() (*polymorphism.RectangleShape, error) 
 }
 
 // GETRectangle — Get rectangle shape
-func (c *Client) GETRectangle(ctx context.Context) (*GETRectangleResponse, error) {
+// GET /rectangle
+func (c *Client) GETRectangle(ctx context.Context, input *polymorphism.RectangleShape) (*GETRectangleResponse, error) {
 
 	u := c.BaseURL + "/rectangle"
+
+
 
 	var body io.Reader
 
@@ -264,14 +276,14 @@ func (c *Client) GETRectangle(ctx context.Context) (*GETRectangleResponse, error
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &GETRectangleResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &GETRectangleResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 

@@ -86,9 +86,12 @@ func (r *GETArraysResponse) StatusOk() (*slicemaps.ArrayFixed, error) {
 }
 
 // GETArrays — Get fixed arrays
-func (c *Client) GETArrays(ctx context.Context) (*GETArraysResponse, error) {
+// GET /arrays
+func (c *Client) GETArrays(ctx context.Context, input *slicemaps.ArrayFixed) (*GETArraysResponse, error) {
 
 	u := c.BaseURL + "/arrays"
+
+
 
 	var body io.Reader
 
@@ -102,14 +105,14 @@ func (c *Client) GETArrays(ctx context.Context) (*GETArraysResponse, error) {
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &GETArraysResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &GETArraysResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 
@@ -140,9 +143,12 @@ func (r *GETMapsResponse) StatusOk() (*slicemaps.MapVariations, error) {
 }
 
 // GETMaps — Get map variations
-func (c *Client) GETMaps(ctx context.Context) (*GETMapsResponse, error) {
+// GET /maps
+func (c *Client) GETMaps(ctx context.Context, input *slicemaps.MapVariations) (*GETMapsResponse, error) {
 
 	u := c.BaseURL + "/maps"
+
+
 
 	var body io.Reader
 
@@ -156,14 +162,14 @@ func (c *Client) GETMaps(ctx context.Context) (*GETMapsResponse, error) {
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &GETMapsResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &GETMapsResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 
@@ -194,9 +200,12 @@ func (r *GETSlicesResponse) StatusOk() (*slicemaps.SliceVariations, error) {
 }
 
 // GETSlices — Get slice variations
-func (c *Client) GETSlices(ctx context.Context) (*GETSlicesResponse, error) {
+// GET /slices
+func (c *Client) GETSlices(ctx context.Context, input *slicemaps.SliceVariations) (*GETSlicesResponse, error) {
 
 	u := c.BaseURL + "/slices"
+
+
 
 	var body io.Reader
 
@@ -210,14 +219,14 @@ func (c *Client) GETSlices(ctx context.Context) (*GETSlicesResponse, error) {
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &GETSlicesResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &GETSlicesResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 

@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"bytes"
 	"encoding/json"
-	"strings"
 	"github.com/arkannsk/nooa/client"
 	filesstream "github.com/arkannsk/nooa/examples/models/02_files_stream"
 )
@@ -66,12 +66,6 @@ func New(baseURL string, hc any) *Client {
 // POST /custom
 
 
-// POSTCustomRequest holds parameters for POSTCustom.
-type POSTCustomRequest struct {
-	// Body is the request body.
-	Body filesstream.CustomWithAnnotations
-}
-
 // POSTCustomResponse holds the response for POSTCustom.
 type POSTCustomResponse struct {
 	*http.Response
@@ -94,19 +88,19 @@ func (r *POSTCustomResponse) StatusCreated() (*filesstream.CustomWithAnnotations
 }
 
 // POSTCustom — Upload with custom annotated types
-func (c *Client) POSTCustom(ctx context.Context, input *POSTCustomRequest) (*POSTCustomResponse, error) {
+// POST /custom
+func (c *Client) POSTCustom(ctx context.Context, input *filesstream.CustomWithAnnotations) (*POSTCustomResponse, error) {
 
 	u := c.BaseURL + "/custom"
 
-	var body io.Reader
 
-	if input != nil {
-		b, err := json.Marshal(input.Body)
-		if err != nil {
-			return nil, fmt.Errorf("marshal request body: %w", err)
-		}
-		body = bytes.NewReader(b)
+
+	var body io.Reader
+	b, err := json.Marshal(input)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request body: %w", err)
 	}
+	body = bytes.NewReader(b)
 
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", u, body)
 	if err != nil {
@@ -119,14 +113,14 @@ func (c *Client) POSTCustom(ctx context.Context, input *POSTCustomRequest) (*POS
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &POSTCustomResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &POSTCustomResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 
@@ -134,12 +128,6 @@ func (c *Client) POSTCustom(ctx context.Context, input *POSTCustomRequest) (*POS
 // Upload with mixed request
 // POST /mixed
 
-
-// POSTMixedRequest holds parameters for POSTMixed.
-type POSTMixedRequest struct {
-	// Body is the request body.
-	Body filesstream.MixedRequest
-}
 
 // POSTMixedResponse holds the response for POSTMixed.
 type POSTMixedResponse struct {
@@ -163,19 +151,19 @@ func (r *POSTMixedResponse) StatusCreated() (*filesstream.MixedRequest, error) {
 }
 
 // POSTMixed — Upload with mixed request
-func (c *Client) POSTMixed(ctx context.Context, input *POSTMixedRequest) (*POSTMixedResponse, error) {
+// POST /mixed
+func (c *Client) POSTMixed(ctx context.Context, input *filesstream.MixedRequest) (*POSTMixedResponse, error) {
 
 	u := c.BaseURL + "/mixed"
 
-	var body io.Reader
 
-	if input != nil {
-		b, err := json.Marshal(input.Body)
-		if err != nil {
-			return nil, fmt.Errorf("marshal request body: %w", err)
-		}
-		body = bytes.NewReader(b)
+
+	var body io.Reader
+	b, err := json.Marshal(input)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request body: %w", err)
 	}
+	body = bytes.NewReader(b)
 
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", u, body)
 	if err != nil {
@@ -188,14 +176,14 @@ func (c *Client) POSTMixed(ctx context.Context, input *POSTMixedRequest) (*POSTM
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &POSTMixedResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &POSTMixedResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 
@@ -203,12 +191,6 @@ func (c *Client) POSTMixed(ctx context.Context, input *POSTMixedRequest) (*POSTM
 // Upload with standard file types
 // POST /standard
 
-
-// POSTStandardRequest holds parameters for POSTStandard.
-type POSTStandardRequest struct {
-	// Body is the request body.
-	Body filesstream.StandardFileTypes
-}
 
 // POSTStandardResponse holds the response for POSTStandard.
 type POSTStandardResponse struct {
@@ -232,19 +214,19 @@ func (r *POSTStandardResponse) StatusCreated() (*filesstream.StandardFileTypes, 
 }
 
 // POSTStandard — Upload with standard file types
-func (c *Client) POSTStandard(ctx context.Context, input *POSTStandardRequest) (*POSTStandardResponse, error) {
+// POST /standard
+func (c *Client) POSTStandard(ctx context.Context, input *filesstream.StandardFileTypes) (*POSTStandardResponse, error) {
 
 	u := c.BaseURL + "/standard"
 
-	var body io.Reader
 
-	if input != nil {
-		b, err := json.Marshal(input.Body)
-		if err != nil {
-			return nil, fmt.Errorf("marshal request body: %w", err)
-		}
-		body = bytes.NewReader(b)
+
+	var body io.Reader
+	b, err := json.Marshal(input)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request body: %w", err)
 	}
+	body = bytes.NewReader(b)
 
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", u, body)
 	if err != nil {
@@ -257,14 +239,14 @@ func (c *Client) POSTStandard(ctx context.Context, input *POSTStandardRequest) (
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &POSTStandardResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &POSTStandardResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 

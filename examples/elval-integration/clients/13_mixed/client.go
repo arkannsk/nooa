@@ -8,9 +8,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
+	"net/url"
 	"bytes"
 	"encoding/json"
-	"strings"
 	"github.com/arkannsk/nooa/client"
 	mixed "github.com/arkannsk/nooa/examples/models/13_mixed"
 )
@@ -88,9 +89,12 @@ func (r *GETAddressResponse) StatusOk() (*mixed.Address, error) {
 }
 
 // GETAddress — Get address
-func (c *Client) GETAddress(ctx context.Context) (*GETAddressResponse, error) {
+// GET /address
+func (c *Client) GETAddress(ctx context.Context, input *mixed.Address) (*GETAddressResponse, error) {
 
 	u := c.BaseURL + "/address"
+
+
 
 	var body io.Reader
 
@@ -104,14 +108,14 @@ func (c *Client) GETAddress(ctx context.Context) (*GETAddressResponse, error) {
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &GETAddressResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &GETAddressResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 
@@ -119,12 +123,6 @@ func (c *Client) GETAddress(ctx context.Context) (*GETAddressResponse, error) {
 // Create mega struct
 // POST /mega
 
-
-// POSTMegaRequest holds parameters for POSTMega.
-type POSTMegaRequest struct {
-	// Body is the request body.
-	Body mixed.MegaStruct
-}
 
 // POSTMegaResponse holds the response for POSTMega.
 type POSTMegaResponse struct {
@@ -148,19 +146,25 @@ func (r *POSTMegaResponse) StatusOk() (*mixed.MegaStruct, error) {
 }
 
 // POSTMega — Create mega struct
-func (c *Client) POSTMega(ctx context.Context, input *POSTMegaRequest) (*POSTMegaResponse, error) {
+// POST /mega
+func (c *Client) POSTMega(ctx context.Context, input *mixed.MegaStruct) (*POSTMegaResponse, error) {
 
 	u := c.BaseURL + "/mega"
 
-	var body io.Reader
 
-	if input != nil {
-		b, err := json.Marshal(input.Body)
-		if err != nil {
-			return nil, fmt.Errorf("marshal request body: %w", err)
-		}
-		body = bytes.NewReader(b)
+	// Query parameters
+	query := url.Values{}
+	query.Set("includedeleted", fmt.Sprintf("%v", input.IncludeDeleted))
+	if len(query) > 0 {
+		u += "?" + query.Encode()
 	}
+
+	var body io.Reader
+	b, err := json.Marshal(input)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request body: %w", err)
+	}
+	body = bytes.NewReader(b)
 
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", u, body)
 	if err != nil {
@@ -168,19 +172,21 @@ func (c *Client) POSTMega(ctx context.Context, input *POSTMegaRequest) (*POSTMeg
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
+	httpReq.Header.Set("apiversion", fmt.Sprintf("%v", input.APIVersion))
+
 	resp, err := c.HTTPClient.Do(ctx, httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &POSTMegaResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &POSTMegaResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 
@@ -211,9 +217,18 @@ func (r *GETMegaResponse) StatusOk() (*mixed.MegaStruct, error) {
 }
 
 // GETMega — Get mega struct from HTTP parameters
-func (c *Client) GETMega(ctx context.Context) (*GETMegaResponse, error) {
+// GET /mega
+func (c *Client) GETMega(ctx context.Context, input *mixed.MegaStruct) (*GETMegaResponse, error) {
 
 	u := c.BaseURL + "/mega"
+
+
+	// Query parameters
+	query := url.Values{}
+	query.Set("includedeleted", fmt.Sprintf("%v", input.IncludeDeleted))
+	if len(query) > 0 {
+		u += "?" + query.Encode()
+	}
 
 	var body io.Reader
 
@@ -222,19 +237,21 @@ func (c *Client) GETMega(ctx context.Context) (*GETMegaResponse, error) {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
+	httpReq.Header.Set("apiversion", fmt.Sprintf("%v", input.APIVersion))
+
 	resp, err := c.HTTPClient.Do(ctx, httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &GETMegaResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &GETMegaResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 
@@ -265,9 +282,12 @@ func (r *GETVariantAdminResponse) StatusOk() (*mixed.AdminVariant, error) {
 }
 
 // GETVariantAdmin — Get admin variant
-func (c *Client) GETVariantAdmin(ctx context.Context) (*GETVariantAdminResponse, error) {
+// GET /variant/admin
+func (c *Client) GETVariantAdmin(ctx context.Context, input *mixed.AdminVariant) (*GETVariantAdminResponse, error) {
 
 	u := c.BaseURL + "/variant/admin"
+
+
 
 	var body io.Reader
 
@@ -281,14 +301,14 @@ func (c *Client) GETVariantAdmin(ctx context.Context) (*GETVariantAdminResponse,
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &GETVariantAdminResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &GETVariantAdminResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 
@@ -319,9 +339,12 @@ func (r *GETVariantUserResponse) StatusOk() (*mixed.UserVariant, error) {
 }
 
 // GETVariantUser — Get user variant
-func (c *Client) GETVariantUser(ctx context.Context) (*GETVariantUserResponse, error) {
+// GET /variant/user
+func (c *Client) GETVariantUser(ctx context.Context, input *mixed.UserVariant) (*GETVariantUserResponse, error) {
 
 	u := c.BaseURL + "/variant/user"
+
+
 
 	var body io.Reader
 
@@ -335,14 +358,14 @@ func (c *Client) GETVariantUser(ctx context.Context) (*GETVariantUserResponse, e
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &GETVariantUserResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &GETVariantUserResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 

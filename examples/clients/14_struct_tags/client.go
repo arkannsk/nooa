@@ -4,13 +4,13 @@
 package structtagsdemo
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
-	"bytes"
-	"encoding/json"
 	"github.com/arkannsk/nooa/client"
 	structtags "github.com/arkannsk/nooa/examples/models/14_struct_tags"
 )
@@ -58,6 +58,45 @@ func New(baseURL string, hc any) *Client {
 	return &Client{
 		BaseURL:    strings.TrimRight(baseURL, "/"),
 		HTTPClient: client,
+	}
+}
+
+// RequestOption modifies an HTTP request before it is sent.
+// Use WithBody, WithQuery, WithHeader, WithPath to configure a request.
+type RequestOption func(*http.Request)
+
+// WithBody sets the request body (JSON-encoded).
+func WithBody(v any) RequestOption {
+	return func(r *http.Request) {
+		b, err := json.Marshal(v)
+		if err != nil {
+			return
+		}
+		r.Body = io.NopCloser(bytes.NewReader(b))
+		r.Header.Set("Content-Type", "application/json")
+	}
+}
+
+// WithQuery adds a query parameter.
+func WithQuery(key string, value any) RequestOption {
+	return func(r *http.Request) {
+		q := r.URL.Query()
+		q.Set(key, fmt.Sprintf("%v", value))
+		r.URL.RawQuery = q.Encode()
+	}
+}
+
+// WithHeader sets a request header.
+func WithHeader(key, value string) RequestOption {
+	return func(r *http.Request) {
+		r.Header.Set(key, value)
+	}
+}
+
+// WithPath substitutes a path placeholder {key} with the given value.
+func WithPath(key string, value any) RequestOption {
+	return func(r *http.Request) {
+		r.URL.Path = strings.ReplaceAll(r.URL.Path, "{"+key+"}", fmt.Sprintf("%v", value))
 	}
 }
 

@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"bytes"
 	"encoding/json"
-	"strings"
 	"github.com/arkannsk/nooa/client"
 	responsecontent "github.com/arkannsk/nooa/examples/models/15_response_content"
 )
@@ -66,12 +66,6 @@ func New(baseURL string, hc any) *Client {
 // POST /create
 
 
-// POSTCreateRequest holds parameters for POSTCreate.
-type POSTCreateRequest struct {
-	// Body is the request body.
-	Body responsecontent.CreateUserResponse
-}
-
 // POSTCreateResponse holds the response for POSTCreate.
 type POSTCreateResponse struct {
 	*http.Response
@@ -94,19 +88,19 @@ func (r *POSTCreateResponse) StatusCreated() (*responsecontent.CreateUserRespons
 }
 
 // POSTCreate — Create user
-func (c *Client) POSTCreate(ctx context.Context, input *POSTCreateRequest) (*POSTCreateResponse, error) {
+// POST /create
+func (c *Client) POSTCreate(ctx context.Context, input *responsecontent.CreateUserResponse) (*POSTCreateResponse, error) {
 
 	u := c.BaseURL + "/create"
 
-	var body io.Reader
 
-	if input != nil {
-		b, err := json.Marshal(input.Body)
-		if err != nil {
-			return nil, fmt.Errorf("marshal request body: %w", err)
-		}
-		body = bytes.NewReader(b)
+
+	var body io.Reader
+	b, err := json.Marshal(input)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request body: %w", err)
 	}
+	body = bytes.NewReader(b)
 
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", u, body)
 	if err != nil {
@@ -119,14 +113,14 @@ func (c *Client) POSTCreate(ctx context.Context, input *POSTCreateRequest) (*POS
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &POSTCreateResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &POSTCreateResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 
@@ -157,7 +151,8 @@ func (r *POSTErrorResponse) StatusOk() (*responsecontent.ErrorResponse, error) {
 }
 
 // POSTError — Error response
-func (c *Client) POSTError(ctx context.Context) (*POSTErrorResponse, error) {
+// POST /error
+func (c *Client) POSTError(ctx context.Context, opts ...client.RequestOption) (*POSTErrorResponse, error) {
 
 	u := c.BaseURL + "/error"
 
@@ -167,20 +162,24 @@ func (c *Client) POSTError(ctx context.Context) (*POSTErrorResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
+	// Apply options
+	for _, opt := range opts {
+		opt(httpReq)
+	}
 
 	resp, err := c.HTTPClient.Do(ctx, httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &POSTErrorResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &POSTErrorResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 
@@ -211,7 +210,8 @@ func (r *GETMultiResponse) StatusOk() (*responsecontent.MultipleResponses, error
 }
 
 // GETMulti — Multiple response codes
-func (c *Client) GETMulti(ctx context.Context) (*GETMultiResponse, error) {
+// GET /multi
+func (c *Client) GETMulti(ctx context.Context, opts ...client.RequestOption) (*GETMultiResponse, error) {
 
 	u := c.BaseURL + "/multi"
 
@@ -221,20 +221,24 @@ func (c *Client) GETMulti(ctx context.Context) (*GETMultiResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
+	// Apply options
+	for _, opt := range opts {
+		opt(httpReq)
+	}
 
 	resp, err := c.HTTPClient.Do(ctx, httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &GETMultiResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &GETMultiResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 
@@ -265,7 +269,8 @@ func (r *GETNocontentResponse) StatusOk() (*responsecontent.NoContentType, error
 }
 
 // GETNocontent — No response annotation
-func (c *Client) GETNocontent(ctx context.Context) (*GETNocontentResponse, error) {
+// GET /no-content
+func (c *Client) GETNocontent(ctx context.Context, opts ...client.RequestOption) (*GETNocontentResponse, error) {
 
 	u := c.BaseURL + "/no-content"
 
@@ -275,20 +280,24 @@ func (c *Client) GETNocontent(ctx context.Context) (*GETNocontentResponse, error
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
+	// Apply options
+	for _, opt := range opts {
+		opt(httpReq)
+	}
 
 	resp, err := c.HTTPClient.Do(ctx, httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &GETNocontentResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &GETNocontentResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 
@@ -319,7 +328,8 @@ func (r *GETNomediaResponse) StatusNoContent() (*responsecontent.NoMediaTypes, e
 }
 
 // GETNomedia — No media types
-func (c *Client) GETNomedia(ctx context.Context) (*GETNomediaResponse, error) {
+// GET /no-media
+func (c *Client) GETNomedia(ctx context.Context, opts ...client.RequestOption) (*GETNomediaResponse, error) {
 
 	u := c.BaseURL + "/no-media"
 
@@ -329,20 +339,24 @@ func (c *Client) GETNomedia(ctx context.Context) (*GETNomediaResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
+	// Apply options
+	for _, opt := range opts {
+		opt(httpReq)
+	}
 
 	resp, err := c.HTTPClient.Do(ctx, httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &GETNomediaResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &GETNomediaResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 
@@ -373,7 +387,8 @@ func (r *GETUserResponse) StatusOk() (*responsecontent.UserResponse, error) {
 }
 
 // GETUser — Get user response
-func (c *Client) GETUser(ctx context.Context) (*GETUserResponse, error) {
+// GET /user
+func (c *Client) GETUser(ctx context.Context, opts ...client.RequestOption) (*GETUserResponse, error) {
 
 	u := c.BaseURL + "/user"
 
@@ -383,20 +398,24 @@ func (c *Client) GETUser(ctx context.Context) (*GETUserResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
+	// Apply options
+	for _, opt := range opts {
+		opt(httpReq)
+	}
 
 	resp, err := c.HTTPClient.Do(ctx, httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &GETUserResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &GETUserResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 

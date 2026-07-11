@@ -86,9 +86,12 @@ func (r *GETIgnoredfieldResponse) StatusOk() (*ignore.WithIgnoredField, error) {
 }
 
 // GETIgnoredfield — Struct with an ignored field
-func (c *Client) GETIgnoredfield(ctx context.Context) (*GETIgnoredfieldResponse, error) {
+// GET /ignored-field
+func (c *Client) GETIgnoredfield(ctx context.Context, input *ignore.WithIgnoredField) (*GETIgnoredfieldResponse, error) {
 
 	u := c.BaseURL + "/ignored-field"
+
+
 
 	var body io.Reader
 
@@ -102,14 +105,14 @@ func (c *Client) GETIgnoredfield(ctx context.Context) (*GETIgnoredfieldResponse,
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &GETIgnoredfieldResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &GETIgnoredfieldResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 
@@ -140,9 +143,12 @@ func (r *GETOnlyignoredResponse) StatusOk() (*ignore.OnlyIgnoredFields, error) {
 }
 
 // GETOnlyignored — Struct with all fields ignored
-func (c *Client) GETOnlyignored(ctx context.Context) (*GETOnlyignoredResponse, error) {
+// GET /only-ignored
+func (c *Client) GETOnlyignored(ctx context.Context, input *ignore.OnlyIgnoredFields) (*GETOnlyignoredResponse, error) {
 
 	u := c.BaseURL + "/only-ignored"
+
+
 
 	var body io.Reader
 
@@ -156,14 +162,14 @@ func (c *Client) GETOnlyignored(ctx context.Context) (*GETOnlyignoredResponse, e
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &GETOnlyignoredResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &GETOnlyignoredResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 
@@ -194,9 +200,12 @@ func (r *GETOverrideResponse) StatusOk() (*ignore.WithOverride, error) {
 }
 
 // GETOverride — Field overrides ignored type
-func (c *Client) GETOverride(ctx context.Context) (*GETOverrideResponse, error) {
+// GET /override
+func (c *Client) GETOverride(ctx context.Context, input *ignore.WithOverride) (*GETOverrideResponse, error) {
 
 	u := c.BaseURL + "/override"
+
+
 
 	var body io.Reader
 
@@ -210,14 +219,14 @@ func (c *Client) GETOverride(ctx context.Context) (*GETOverrideResponse, error) 
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &GETOverrideResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &GETOverrideResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 

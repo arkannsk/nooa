@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 {{- if .HasQueryParams }}
 	"net/url"
 {{- end }}
@@ -16,7 +17,6 @@ import (
 	"bytes"
 	"encoding/json"
 {{- end }}
-	"strings"
 	"github.com/arkannsk/nooa/client"
 {{- range .Imports }}
 {{- $alias := index $.PackageAliases . }}

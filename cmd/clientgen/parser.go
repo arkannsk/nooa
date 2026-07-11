@@ -38,6 +38,11 @@ type RouteInfo struct {
 	ResponseSchemas     map[int]string // status -> schema name (from .Response())
 	// MultiRespEntries holds per-status schema info for NewRouteMultiResp
 	MultiRespEntries    []MultiRespEntry
+	// Model fields extracted from @oa:in annotations
+	QueryParams   []FieldParameterInfo
+	HeaderParams  []FieldParameterInfo
+	PathParams    []FieldParameterInfo
+	HasBodyFields bool // true if the struct has fields without @oa:in
 }
 
 // MultiRespEntry holds one ResponseEntry from NewRouteMultiResp.
@@ -84,6 +89,9 @@ func ParsePackage(pkgPath string) (*PackageInfo, error) {
 
 	// Extract routes with chained metadata
 	extractRoutes(node, info)
+
+	// Resolve model parameters from @oa:in annotations
+	resolveModelParams(info, pkgPath)
 
 	return info, nil
 }
@@ -515,6 +523,29 @@ func resolveImportForType(typeName string, info *PackageInfo) string {
 		}
 	}
 	return ""
+}
+
+// resolveModelParams parses model files for each route to extract @oa:in annotations.
+// It populates QueryParams, HeaderParams, PathParams, and HasBodyFields on each route.
+func resolveModelParams(info *PackageInfo, pkgDir string) {
+	for i := range info.Routes {
+		route := &info.Routes[i]
+		if route.ReqImport == "" {
+			continue
+		}
+
+		// Extract type name from ReqType (could be "alias.TypeName" or "TypeName")
+		typeName := route.ReqType
+		if idx := strings.LastIndex(typeName, "."); idx >= 0 {
+			typeName = typeName[idx+1:]
+		}
+
+		qp, hp, pp, hasBody := parseModelFile(route.ReqImport, typeName, pkgDir)
+		route.QueryParams = qp
+		route.HeaderParams = hp
+		route.PathParams = pp
+		route.HasBodyFields = hasBody
+	}
 }
 
 func defaultOperationID(method, path string) string {

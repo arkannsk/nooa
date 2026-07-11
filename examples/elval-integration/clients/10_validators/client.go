@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"bytes"
 	"encoding/json"
-	"strings"
 	"github.com/arkannsk/nooa/client"
 	validators "github.com/arkannsk/nooa/examples/models/10_validators"
 )
@@ -66,12 +66,6 @@ func New(baseURL string, hc any) *Client {
 // POST /validate/date
 
 
-// POSTValidateDateRequest holds parameters for POSTValidateDate.
-type POSTValidateDateRequest struct {
-	// Body is the request body.
-	Body validators.DateAndDurationValidators
-}
-
 // POSTValidateDateResponse holds the response for POSTValidateDate.
 type POSTValidateDateResponse struct {
 	*http.Response
@@ -94,19 +88,19 @@ func (r *POSTValidateDateResponse) StatusOk() (*validators.DateAndDurationValida
 }
 
 // POSTValidateDate — Validate date and duration fields
-func (c *Client) POSTValidateDate(ctx context.Context, input *POSTValidateDateRequest) (*POSTValidateDateResponse, error) {
+// POST /validate/date
+func (c *Client) POSTValidateDate(ctx context.Context, input *validators.DateAndDurationValidators) (*POSTValidateDateResponse, error) {
 
 	u := c.BaseURL + "/validate/date"
 
-	var body io.Reader
 
-	if input != nil {
-		b, err := json.Marshal(input.Body)
-		if err != nil {
-			return nil, fmt.Errorf("marshal request body: %w", err)
-		}
-		body = bytes.NewReader(b)
+
+	var body io.Reader
+	b, err := json.Marshal(input)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request body: %w", err)
 	}
+	body = bytes.NewReader(b)
 
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", u, body)
 	if err != nil {
@@ -119,14 +113,14 @@ func (c *Client) POSTValidateDate(ctx context.Context, input *POSTValidateDateRe
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &POSTValidateDateResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &POSTValidateDateResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 
@@ -134,12 +128,6 @@ func (c *Client) POSTValidateDate(ctx context.Context, input *POSTValidateDateRe
 // Validate enum and slice fields
 // POST /validate/enum-slice
 
-
-// POSTValidateEnumsliceRequest holds parameters for POSTValidateEnumslice.
-type POSTValidateEnumsliceRequest struct {
-	// Body is the request body.
-	Body validators.AllEnumAndSliceValidators
-}
 
 // POSTValidateEnumsliceResponse holds the response for POSTValidateEnumslice.
 type POSTValidateEnumsliceResponse struct {
@@ -163,19 +151,19 @@ func (r *POSTValidateEnumsliceResponse) StatusOk() (*validators.AllEnumAndSliceV
 }
 
 // POSTValidateEnumslice — Validate enum and slice fields
-func (c *Client) POSTValidateEnumslice(ctx context.Context, input *POSTValidateEnumsliceRequest) (*POSTValidateEnumsliceResponse, error) {
+// POST /validate/enum-slice
+func (c *Client) POSTValidateEnumslice(ctx context.Context, input *validators.AllEnumAndSliceValidators) (*POSTValidateEnumsliceResponse, error) {
 
 	u := c.BaseURL + "/validate/enum-slice"
 
-	var body io.Reader
 
-	if input != nil {
-		b, err := json.Marshal(input.Body)
-		if err != nil {
-			return nil, fmt.Errorf("marshal request body: %w", err)
-		}
-		body = bytes.NewReader(b)
+
+	var body io.Reader
+	b, err := json.Marshal(input)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request body: %w", err)
 	}
+	body = bytes.NewReader(b)
 
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", u, body)
 	if err != nil {
@@ -188,14 +176,14 @@ func (c *Client) POSTValidateEnumslice(ctx context.Context, input *POSTValidateE
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &POSTValidateEnumsliceResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &POSTValidateEnumsliceResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 
@@ -203,12 +191,6 @@ func (c *Client) POSTValidateEnumslice(ctx context.Context, input *POSTValidateE
 // Validate numeric fields
 // POST /validate/numeric
 
-
-// POSTValidateNumericRequest holds parameters for POSTValidateNumeric.
-type POSTValidateNumericRequest struct {
-	// Body is the request body.
-	Body validators.AllNumericValidators
-}
 
 // POSTValidateNumericResponse holds the response for POSTValidateNumeric.
 type POSTValidateNumericResponse struct {
@@ -232,19 +214,19 @@ func (r *POSTValidateNumericResponse) StatusOk() (*validators.AllNumericValidato
 }
 
 // POSTValidateNumeric — Validate numeric fields
-func (c *Client) POSTValidateNumeric(ctx context.Context, input *POSTValidateNumericRequest) (*POSTValidateNumericResponse, error) {
+// POST /validate/numeric
+func (c *Client) POSTValidateNumeric(ctx context.Context, input *validators.AllNumericValidators) (*POSTValidateNumericResponse, error) {
 
 	u := c.BaseURL + "/validate/numeric"
 
-	var body io.Reader
 
-	if input != nil {
-		b, err := json.Marshal(input.Body)
-		if err != nil {
-			return nil, fmt.Errorf("marshal request body: %w", err)
-		}
-		body = bytes.NewReader(b)
+
+	var body io.Reader
+	b, err := json.Marshal(input)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request body: %w", err)
 	}
+	body = bytes.NewReader(b)
 
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", u, body)
 	if err != nil {
@@ -257,14 +239,14 @@ func (c *Client) POSTValidateNumeric(ctx context.Context, input *POSTValidateNum
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &POSTValidateNumericResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &POSTValidateNumericResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 
@@ -272,12 +254,6 @@ func (c *Client) POSTValidateNumeric(ctx context.Context, input *POSTValidateNum
 // Validate string fields
 // POST /validate/string
 
-
-// POSTValidateStringRequest holds parameters for POSTValidateString.
-type POSTValidateStringRequest struct {
-	// Body is the request body.
-	Body validators.AllStringValidators
-}
 
 // POSTValidateStringResponse holds the response for POSTValidateString.
 type POSTValidateStringResponse struct {
@@ -301,19 +277,19 @@ func (r *POSTValidateStringResponse) StatusOk() (*validators.AllStringValidators
 }
 
 // POSTValidateString — Validate string fields
-func (c *Client) POSTValidateString(ctx context.Context, input *POSTValidateStringRequest) (*POSTValidateStringResponse, error) {
+// POST /validate/string
+func (c *Client) POSTValidateString(ctx context.Context, input *validators.AllStringValidators) (*POSTValidateStringResponse, error) {
 
 	u := c.BaseURL + "/validate/string"
 
-	var body io.Reader
 
-	if input != nil {
-		b, err := json.Marshal(input.Body)
-		if err != nil {
-			return nil, fmt.Errorf("marshal request body: %w", err)
-		}
-		body = bytes.NewReader(b)
+
+	var body io.Reader
+	b, err := json.Marshal(input)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request body: %w", err)
 	}
+	body = bytes.NewReader(b)
 
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", u, body)
 	if err != nil {
@@ -326,14 +302,14 @@ func (c *Client) POSTValidateString(ctx context.Context, input *POSTValidateStri
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &POSTValidateStringResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &POSTValidateStringResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 

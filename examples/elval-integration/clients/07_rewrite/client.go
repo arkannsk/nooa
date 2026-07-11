@@ -86,9 +86,12 @@ func (r *GETGeofeatureResponse) StatusOk() (*rewrite.CreateLocationRequest, erro
 }
 
 // GETGeofeature — Get location with geojson Feature
-func (c *Client) GETGeofeature(ctx context.Context) (*GETGeofeatureResponse, error) {
+// GET /geo-feature
+func (c *Client) GETGeofeature(ctx context.Context, input *rewrite.CreateLocationRequest) (*GETGeofeatureResponse, error) {
 
 	u := c.BaseURL + "/geo-feature"
+
+
 
 	var body io.Reader
 
@@ -102,14 +105,14 @@ func (c *Client) GETGeofeature(ctx context.Context) (*GETGeofeatureResponse, err
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &GETGeofeatureResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &GETGeofeatureResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 
@@ -140,9 +143,12 @@ func (r *GETGeopointResponse) StatusOk() (*rewrite.CreateLocationWithPoint, erro
 }
 
 // GETGeopoint — Get location with orb Point
-func (c *Client) GETGeopoint(ctx context.Context) (*GETGeopointResponse, error) {
+// GET /geo-point
+func (c *Client) GETGeopoint(ctx context.Context, input *rewrite.CreateLocationWithPoint) (*GETGeopointResponse, error) {
 
 	u := c.BaseURL + "/geo-point"
+
+
 
 	var body io.Reader
 
@@ -156,14 +162,14 @@ func (c *Client) GETGeopoint(ctx context.Context) (*GETGeopointResponse, error) 
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &GETGeopointResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &GETGeopointResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 
@@ -194,9 +200,12 @@ func (r *GETRewriterefResponse) StatusOk() (*rewrite.WithRewriteRef, error) {
 }
 
 // GETRewriteref — Get struct with rewritten references
-func (c *Client) GETRewriteref(ctx context.Context) (*GETRewriterefResponse, error) {
+// GET /rewrite-ref
+func (c *Client) GETRewriteref(ctx context.Context, input *rewrite.WithRewriteRef) (*GETRewriterefResponse, error) {
 
 	u := c.BaseURL + "/rewrite-ref"
+
+
 
 	var body io.Reader
 
@@ -210,14 +219,14 @@ func (c *Client) GETRewriteref(ctx context.Context) (*GETRewriterefResponse, err
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &GETRewriterefResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &GETRewriterefResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 
@@ -248,9 +257,12 @@ func (r *GETRewritetypeResponse) StatusOk() (*rewrite.WithRewriteType, error) {
 }
 
 // GETRewritetype — Get struct with rewritten types
-func (c *Client) GETRewritetype(ctx context.Context) (*GETRewritetypeResponse, error) {
+// GET /rewrite-type
+func (c *Client) GETRewritetype(ctx context.Context, input *rewrite.WithRewriteType) (*GETRewritetypeResponse, error) {
 
 	u := c.BaseURL + "/rewrite-type"
+
+
 
 	var body io.Reader
 
@@ -264,14 +276,14 @@ func (c *Client) GETRewritetype(ctx context.Context) (*GETRewritetypeResponse, e
 		return nil, fmt.Errorf("do request: %w", err)
 	}
 
-	result := &GETRewritetypeResponse{
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rb, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	}
+	return &GETRewritetypeResponse{
 		Response: resp,
 		client:   c,
-	}
-	if resp.StatusCode >= 400 {
-		return result, fmt.Errorf("request failed: status %d", resp.StatusCode)
-	}
-	return result, nil
+	}, nil
 }
 
 

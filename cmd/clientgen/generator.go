@@ -87,11 +87,17 @@ type OperationData struct {
 	ResponseBody   *ResponseBodyData
 	SuccessCodes   []string
 	HasRequestBody bool
+	// UsesModelAsInput — when true, the method accepts the model directly
+	// instead of a generated *Request struct.
+	UsesModelAsInput bool
+	// ModelInputGoType — the model type with package alias prefix (e.g. "httpparams.QueryParams").
+	ModelInputGoType string
 }
 
 // ParameterData holds data for a single parameter.
 type ParameterData struct {
-	Name        string
+	Name        string // parameter name for HTTP (e.g. "X-API-Key", "query")
+	GoFieldName string // original Go struct field name (e.g. "APIKey", "Query")
 	In          string
 	Required    bool
 	Description string
@@ -198,21 +204,36 @@ func (g *Generator) buildOperationData(route RouteInfo) *OperationData {
 		MethodName:  sanitizeMethodName(route.OperationID),
 		Summary:     route.Summary,
 		Tags:        route.Tags,
-		PathParams:  g.extractPathParams(route.Path),
 	}
 	if od.MethodName == "" {
 		od.MethodName = camelCase(route.Method)
 	}
 
-	// Request body for POST/PUT/PATCH
-	if route.HasReqBody && route.ReqImport != "" {
-		od.HasRequestBody = true
-		od.RequestBody = &RequestBodyData{
-			Required:   true,
-			SchemaName: route.ReqType,
-			GoType:     g.typeRef(route.ReqType, route.ReqImport),
-			ImportPath: route.ReqImport,
+	// Extract params from model annotations (if available) or from path template
+	od.PathParams = g.extractPathParams(route)
+	od.QueryParams = g.extractQueryParams(route)
+	od.HeaderParams = g.extractHeaderParams(route)
+
+	// Determine if we can use the model directly as input.
+	// When the request model exists, always accept it directly —
+	// no need to generate a duplicate *Request struct.
+	hasAnyParams := len(od.PathParams) > 0 || len(od.QueryParams) > 0 || len(od.HeaderParams) > 0
+	if route.ReqImport != "" {
+		od.UsesModelAsInput = true
+		od.ModelInputGoType = g.typeRef(route.ReqType, route.ReqImport)
+		// Only set HasRequestBody if the model actually has body fields
+		if route.HasReqBody && route.HasBodyFields {
+			od.HasRequestBody = true
+			od.RequestBody = &RequestBodyData{
+				Required:   true,
+				SchemaName: route.ReqType,
+				GoType:     g.typeRef(route.ReqType, route.ReqImport),
+				ImportPath: route.ReqImport,
+			}
 		}
+	} else if hasAnyParams {
+		// Params exist but no request model — generate *Request struct.
+		od.UsesModelAsInput = false
 	}
 
 	// Response body — collect all status codes
@@ -291,24 +312,72 @@ func (g *Generator) buildOperationData(route RouteInfo) *OperationData {
 	return od
 }
 
-// extractPathParams parses path template like /users/{id} and returns path params.
-func (g *Generator) extractPathParams(path string) []ParameterData {
+// extractPathParams returns path params from model annotations if available,
+// otherwise falls back to parsing the path template.
+func (g *Generator) extractPathParams(route RouteInfo) []ParameterData {
+	if len(route.PathParams) > 0 {
+		var params []ParameterData
+		for _, p := range route.PathParams {
+			params = append(params, ParameterData{
+				Name:        p.ParamName,
+				GoFieldName: p.Name,
+				In:          "path",
+				Required:    true,
+				Description: p.Description,
+				GoType:      p.GoType,
+			})
+		}
+		return params
+	}
+	// Fallback: parse from path template
 	var params []ParameterData
-	segments := strings.Split(path, "/")
+	segments := strings.Split(route.Path, "/")
 	for _, seg := range segments {
 		if strings.HasPrefix(seg, "{") && strings.HasSuffix(seg, "}") {
 			name := seg[1 : len(seg)-1]
 			params = append(params, ParameterData{
-				Name:     name,
-				In:       "path",
-				Required: true,
-				GoType:   "string",
+				Name:        name,
+				GoFieldName: toGoTypeName(name),
+				In:          "path",
+				Required:    true,
+				GoType:      "string",
 			})
 		}
 	}
 	return params
 }
 
+// extractQueryParams returns query params from model annotations.
+func (g *Generator) extractQueryParams(route RouteInfo) []ParameterData {
+	var params []ParameterData
+	for _, p := range route.QueryParams {
+		params = append(params, ParameterData{
+			Name:        p.ParamName,
+			GoFieldName: p.Name,
+			In:          "query",
+			Required:    false,
+			Description: p.Description,
+			GoType:      p.GoType,
+		})
+	}
+	return params
+}
+
+// extractHeaderParams returns header params from model annotations.
+func (g *Generator) extractHeaderParams(route RouteInfo) []ParameterData {
+	var params []ParameterData
+	for _, p := range route.HeaderParams {
+		params = append(params, ParameterData{
+			Name:        p.ParamName,
+			GoFieldName: p.Name,
+			In:          "header",
+			Required:    false,
+			Description: p.Description,
+			GoType:      p.GoType,
+		})
+	}
+	return params
+}
 // typeRef returns the type name prefixed with package alias if applicable.
 func (g *Generator) typeRef(typeName string, importPath string) string {
 	if importPath == "" {

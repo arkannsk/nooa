@@ -122,12 +122,16 @@ func TestGenerate_HttpParams(t *testing.T) {
 	}
 	result := string(resultBytes)
 
-	// Check path param handling
-	if !strings.Contains(result, `strings.ReplaceAll(u, "{id}",`) {
-		t.Error("expected path param replacement with {id}")
+	// RequestOption and helpers are now shared via github.com/arkannsk/nooa/client
+	if !strings.Contains(result, "github.com/arkannsk/nooa/client") {
+		t.Error("expected nooa/client import")
 	}
-	if !strings.Contains(result, "Id string") {
-		t.Error("expected Id field in request struct")
+	// Methods with model accept the model directly, not a generated *Request
+	if !strings.Contains(result, "*httpparams.HeaderParams") {
+		t.Error("expected model type in POSTHeaderdemo method")
+	}
+	if !strings.Contains(result, "*httpparams.QueryParams") {
+		t.Error("expected model type in GETSearch method")
 	}
 }
 
