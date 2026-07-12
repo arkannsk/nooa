@@ -97,6 +97,17 @@ func (r *GETRewriterefResponse) Body() io.ReadCloser {
 	return nil
 }
 
+// Stream returns a nooaclient.StreamReader for buffered streaming of the response body.
+// It reads the body once and caches it, so subsequent calls return a reader over the same data.
+// Use StreamOption (WithBufferSize, WithProgress) to configure the stream.
+func (r *GETRewriterefResponse) Stream(opts ...nooaclient.StreamOption) *nooaclient.StreamReader {
+	if err := r.readBody(); err != nil {
+		return nil
+	}
+	opts = append(opts, nooaclient.WithTotal(r.resp.ContentLength))
+	return nooaclient.NewStreamReader(r.resp.Body, opts...)
+}
+
 // readBody reads the response body once and replaces resp.Body with a cached reader
 // so subsequent reads (Body(), further Status* calls) can reuse the data.
 func (r *GETRewriterefResponse) readBody() error {
@@ -162,6 +173,17 @@ func (r *GETRewritetypeResponse) Body() io.ReadCloser {
 		return r.resp.Body
 	}
 	return nil
+}
+
+// Stream returns a nooaclient.StreamReader for buffered streaming of the response body.
+// It reads the body once and caches it, so subsequent calls return a reader over the same data.
+// Use StreamOption (WithBufferSize, WithProgress) to configure the stream.
+func (r *GETRewritetypeResponse) Stream(opts ...nooaclient.StreamOption) *nooaclient.StreamReader {
+	if err := r.readBody(); err != nil {
+		return nil
+	}
+	opts = append(opts, nooaclient.WithTotal(r.resp.ContentLength))
+	return nooaclient.NewStreamReader(r.resp.Body, opts...)
 }
 
 // readBody reads the response body once and replaces resp.Body with a cached reader

@@ -159,3 +159,118 @@ func WithPath(key string, value any) RequestOption {
 		r.URL.Path = strings.ReplaceAll(r.URL.Path, "{"+key+"}", fmt.Sprintf("%v", value))
 	}
 }
+
+// --- Streaming ---
+
+// StreamReader wraps an io.ReadCloser with buffered reading and optional
+// progress callbacks. It is useful for streaming large responses (e.g. files)
+// to another writer such as a file or Minio upload.
+type StreamReader struct {
+	reader     io.Reader
+	closer     io.Closer
+	bufSize    int
+	progressFn func(bytesRead int64)
+	total      int64
+	read       int64
+}
+
+// StreamOption configures a StreamReader.
+type StreamOption func(*StreamReader)
+
+// WithBufferSize sets the buffer size for streaming reads.
+// Default is 32 KB.
+func WithBufferSize(size int) StreamOption {
+	return func(s *StreamReader) {
+		s.bufSize = size
+	}
+}
+
+// WithProgress sets a callback invoked after each buffer read.
+// The callback receives the cumulative number of bytes read so far.
+func WithProgress(fn func(bytesRead int64)) StreamOption {
+	return func(s *StreamReader) {
+		s.progressFn = fn
+	}
+}
+
+// WithTotal sets the expected total size (from Content-Length).
+// Used for progress reporting.
+func WithTotal(total int64) StreamOption {
+	return func(s *StreamReader) {
+		s.total = total
+	}
+}
+
+// NewStreamReader creates a new StreamReader from an io.ReadCloser.
+// The default buffer size is 32 KB.
+func NewStreamReader(rc io.ReadCloser, opts ...StreamOption) *StreamReader {
+	s := &StreamReader{
+		reader:  rc,
+		closer:  rc,
+		bufSize: 32 * 1024, // 32 KB default
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
+}
+
+// Read implements io.Reader. It reads into the provided buffer,
+// updating the internal byte counter and invoking the progress callback.
+func (s *StreamReader) Read(p []byte) (int, error) {
+	n, err := s.reader.Read(p)
+	if n > 0 {
+		s.read += int64(n)
+		if s.progressFn != nil {
+			s.progressFn(s.read)
+		}
+	}
+	return n, err
+}
+
+// Close implements io.Closer.
+func (s *StreamReader) Close() error {
+	if s.closer != nil {
+		return s.closer.Close()
+	}
+	return nil
+}
+
+// PipeTo copies the entire stream to the given writer using the configured
+// buffer size. It returns the total number of bytes copied.
+// After calling PipeTo, the stream is exhausted and should be closed.
+func (s *StreamReader) PipeTo(w io.Writer) (int64, error) {
+	buf := make([]byte, s.bufSize)
+	var total int64
+	for {
+		n, err := s.reader.Read(buf)
+		if n > 0 {
+			s.read += int64(n)
+			total += int64(n)
+			if s.progressFn != nil {
+				s.progressFn(s.read)
+			}
+			_, wErr := w.Write(buf[:n])
+			if wErr != nil {
+				return total, wErr
+			}
+		}
+		if err != nil {
+			return total, err
+		}
+	}
+}
+
+// BytesRead returns the cumulative number of bytes read so far.
+func (s *StreamReader) BytesRead() int64 {
+	return s.read
+}
+
+// Progress returns the fraction of data read so far (0.0–1.0).
+// If total size is unknown (not set via WithTotal), returns -1.
+func (s *StreamReader) Progress() float64 {
+	if s.total <= 0 {
+		return -1
+	}
+	return float64(s.read) / float64(s.total)
+}

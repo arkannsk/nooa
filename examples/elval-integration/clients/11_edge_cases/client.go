@@ -207,6 +207,17 @@ func (r *GETCircularResponse) Body() io.ReadCloser {
 	return nil
 }
 
+// Stream returns a nooaclient.StreamReader for buffered streaming of the response body.
+// It reads the body once and caches it, so subsequent calls return a reader over the same data.
+// Use StreamOption (WithBufferSize, WithProgress) to configure the stream.
+func (r *GETCircularResponse) Stream(opts ...nooaclient.StreamOption) *nooaclient.StreamReader {
+	if err := r.readBody(); err != nil {
+		return nil
+	}
+	opts = append(opts, nooaclient.WithTotal(r.resp.ContentLength))
+	return nooaclient.NewStreamReader(r.resp.Body, opts...)
+}
+
 // readBody reads the response body once and replaces resp.Body with a cached reader
 // so subsequent reads (Body(), further Status* calls) can reuse the data.
 func (r *GETCircularResponse) readBody() error {
@@ -272,6 +283,17 @@ func (r *GETEmptyResponse) Body() io.ReadCloser {
 		return r.resp.Body
 	}
 	return nil
+}
+
+// Stream returns a nooaclient.StreamReader for buffered streaming of the response body.
+// It reads the body once and caches it, so subsequent calls return a reader over the same data.
+// Use StreamOption (WithBufferSize, WithProgress) to configure the stream.
+func (r *GETEmptyResponse) Stream(opts ...nooaclient.StreamOption) *nooaclient.StreamReader {
+	if err := r.readBody(); err != nil {
+		return nil
+	}
+	opts = append(opts, nooaclient.WithTotal(r.resp.ContentLength))
+	return nooaclient.NewStreamReader(r.resp.Body, opts...)
 }
 
 // readBody reads the response body once and replaces resp.Body with a cached reader
@@ -341,6 +363,17 @@ func (r *GETOneofResponse) Body() io.ReadCloser {
 	return nil
 }
 
+// Stream returns a nooaclient.StreamReader for buffered streaming of the response body.
+// It reads the body once and caches it, so subsequent calls return a reader over the same data.
+// Use StreamOption (WithBufferSize, WithProgress) to configure the stream.
+func (r *GETOneofResponse) Stream(opts ...nooaclient.StreamOption) *nooaclient.StreamReader {
+	if err := r.readBody(); err != nil {
+		return nil
+	}
+	opts = append(opts, nooaclient.WithTotal(r.resp.ContentLength))
+	return nooaclient.NewStreamReader(r.resp.Body, opts...)
+}
+
 // readBody reads the response body once and replaces resp.Body with a cached reader
 // so subsequent reads (Body(), further Status* calls) can reuse the data.
 func (r *GETOneofResponse) readBody() error {
@@ -408,6 +441,17 @@ func (r *GETPointerchainResponse) Body() io.ReadCloser {
 	return nil
 }
 
+// Stream returns a nooaclient.StreamReader for buffered streaming of the response body.
+// It reads the body once and caches it, so subsequent calls return a reader over the same data.
+// Use StreamOption (WithBufferSize, WithProgress) to configure the stream.
+func (r *GETPointerchainResponse) Stream(opts ...nooaclient.StreamOption) *nooaclient.StreamReader {
+	if err := r.readBody(); err != nil {
+		return nil
+	}
+	opts = append(opts, nooaclient.WithTotal(r.resp.ContentLength))
+	return nooaclient.NewStreamReader(r.resp.Body, opts...)
+}
+
 // readBody reads the response body once and replaces resp.Body with a cached reader
 // so subsequent reads (Body(), further Status* calls) can reuse the data.
 func (r *GETPointerchainResponse) readBody() error {
@@ -473,6 +517,17 @@ func (r *GETUntypednilResponse) Body() io.ReadCloser {
 		return r.resp.Body
 	}
 	return nil
+}
+
+// Stream returns a nooaclient.StreamReader for buffered streaming of the response body.
+// It reads the body once and caches it, so subsequent calls return a reader over the same data.
+// Use StreamOption (WithBufferSize, WithProgress) to configure the stream.
+func (r *GETUntypednilResponse) Stream(opts ...nooaclient.StreamOption) *nooaclient.StreamReader {
+	if err := r.readBody(); err != nil {
+		return nil
+	}
+	opts = append(opts, nooaclient.WithTotal(r.resp.ContentLength))
+	return nooaclient.NewStreamReader(r.resp.Body, opts...)
 }
 
 // readBody reads the response body once and replaces resp.Body with a cached reader
