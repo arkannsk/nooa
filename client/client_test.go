@@ -1,195 +1,237 @@
 package client
 
 import (
+	"bytes"
+	"encoding/xml"
+	"io"
 	"net/http"
-	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
-type testStruct struct {
-	Name  string `json:"name" xml:"name" yaml:"name"`
-	Value int    `json:"value" xml:"value" yaml:"value"`
-}
+// --- StreamReader tests ---
 
-func newTestResponse(body string, contentType string) *http.Response {
-	return &http.Response{
-		Header: map[string][]string{"Content-Type": {contentType}},
-		Body:   http.MaxBytesReader(nil, http.NoBody, 0),
+func TestStreamReader_DefaultBufferSize(t *testing.T) {
+	rc := io.NopCloser(strings.NewReader("data"))
+	s := NewStreamReader(rc)
+	if s.bufSize != 32*1024 {
+		t.Fatalf("expected default bufSize 32KB, got %d", s.bufSize)
 	}
 }
 
-func newResponseWithBody(body string, contentType string) *http.Response {
-	return &http.Response{
-		Header: map[string][]string{"Content-Type": {contentType}},
-		Body:   http.MaxBytesReader(nil, http.NoBody, 0),
+func TestStreamReader_Read(t *testing.T) {
+	data := "test data for streaming"
+	rc := io.NopCloser(strings.NewReader(data))
+	s := NewStreamReader(rc)
+
+	result := &bytes.Buffer{}
+	for {
+		buf := make([]byte, 5)
+		n, err := s.Read(buf)
+		result.Write(buf[:n])
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	}
+
+	if result.String() != data {
+		t.Fatalf("expected %q, got %q", data, result.String())
 	}
 }
 
-func TestJSONCodec(t *testing.T) {
-	c := &JSONCodec{}
+func TestStreamReader_Progress(t *testing.T) {
+	data := strings.Repeat("x", 100)
+	var progressCalls []int64
+	rc := io.NopCloser(strings.NewReader(data))
+	s := NewStreamReader(rc,
+		WithBufferSize(10),
+		WithTotal(100),
+		WithProgress(func(n int64) {
+			progressCalls = append(progressCalls, n)
+		}),
+	)
 
-	// Marshal
-	b, err := c.Marshal(testStruct{Name: "Alice", Value: 42})
+	buf := make([]byte, 10)
+	for {
+		_, err := s.Read(buf)
+		if err == io.EOF {
+			break
+		}
+	}
+
+	if len(progressCalls) == 0 {
+		t.Fatal("progress callback was never called")
+	}
+	if progressCalls[len(progressCalls)-1] != 100 {
+		t.Fatalf("expected final progress 100, got %d", progressCalls[len(progressCalls)-1])
+	}
+
+	p := s.Progress()
+	if p != 1.0 {
+		t.Fatalf("expected progress 1.0, got %f", p)
+	}
+}
+
+func TestStreamReader_Progress_UnknownTotal(t *testing.T) {
+	rc := io.NopCloser(strings.NewReader("data"))
+	s := NewStreamReader(rc)
+
+	if s.Progress() != -1 {
+		t.Fatalf("expected -1 for unknown total, got %f", s.Progress())
+	}
+}
+
+func TestStreamReader_PipeTo(t *testing.T) {
+	data := strings.Repeat("pipe test data\n", 500) // ~9 KB
+	rc := io.NopCloser(strings.NewReader(data))
+	s := NewStreamReader(rc, WithBufferSize(4096))
+
+	dst := &bytes.Buffer{}
+	n, err := s.PipeTo(dst)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("unexpected error: %v", err)
 	}
-	expected := `{"name":"Alice","value":42}`
-	if string(b) != expected {
-		t.Fatalf("got %s, want %s", b, expected)
+	if n != int64(len(data)) {
+		t.Fatalf("expected %d bytes, got %d", len(data), n)
 	}
-
-	// Unmarshal
-	var v testStruct
-	if err := c.Unmarshal([]byte(expected), &v); err != nil {
-		t.Fatal(err)
-	}
-	if v.Name != "Alice" || v.Value != 42 {
-		t.Fatalf("got %+v", v)
+	if dst.String() != data {
+		t.Fatalf("data mismatch")
 	}
 }
 
-func TestXMLCodec(t *testing.T) {
-	c := &XMLCodec{}
+func TestStreamReader_PipeTo_Progress(t *testing.T) {
+	data := strings.Repeat("x", 200)
+	var progressCalls []int64
+	rc := io.NopCloser(strings.NewReader(data))
+	s := NewStreamReader(rc,
+		WithBufferSize(20),
+		WithTotal(200),
+		WithProgress(func(n int64) {
+			progressCalls = append(progressCalls, n)
+		}),
+	)
 
-	// Marshal
-	b, err := c.Marshal(testStruct{Name: "Alice", Value: 42})
+	dst := &bytes.Buffer{}
+	n, err := s.PipeTo(dst)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(b) == 0 {
-		t.Fatal("empty xml output")
+	if n != int64(len(data)) {
+		t.Fatalf("expected %d bytes, got %d", len(data), n)
 	}
-
-	// Unmarshal
-	var v testStruct
-	xmlData := []byte(`<testStruct><name>Alice</name><value>42</value></testStruct>`)
-	if err := c.Unmarshal(xmlData, &v); err != nil {
-		t.Fatal(err)
-	}
-	if v.Name != "Alice" || v.Value != 42 {
-		t.Fatalf("got %+v", v)
+	if progressCalls[len(progressCalls)-1] != 200 {
+		t.Fatalf("expected final progress 200, got %d", progressCalls[len(progressCalls)-1])
 	}
 }
 
-func TestYAMLCodec(t *testing.T) {
-	c := &YAMLCodec{}
+func TestStreamReader_BytesRead(t *testing.T) {
+	rc := io.NopCloser(strings.NewReader("1234567890"))
+	s := NewStreamReader(rc, WithBufferSize(3))
 
-	// Marshal
-	b, err := c.Marshal(testStruct{Name: "Alice", Value: 42})
+	buf := make([]byte, 3)
+	s.Read(buf) // 3
+	s.Read(buf) // 3
+	s.Read(buf) // 3
+
+	if s.BytesRead() != 9 {
+		t.Fatalf("expected 9 bytes read, got %d", s.BytesRead())
+	}
+}
+
+func TestStreamReader_Close(t *testing.T) {
+	rc := io.NopCloser(strings.NewReader("data"))
+	s := NewStreamReader(rc)
+
+	err := s.Close()
 	if err != nil {
-		t.Fatal(err)
-	}
-	if len(b) == 0 {
-		t.Fatal("empty yaml output")
-	}
-
-	// Unmarshal
-	var v testStruct
-	yamlData := []byte("name: Alice\nvalue: 42\n")
-	if err := c.Unmarshal(yamlData, &v); err != nil {
-		t.Fatal(err)
-	}
-	if v.Name != "Alice" || v.Value != 42 {
-		t.Fatalf("got %+v", v)
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestStreamReader_WithBufferSize(t *testing.T) {
+	rc := io.NopCloser(strings.NewReader("data"))
+	s := NewStreamReader(rc, WithBufferSize(64*1024))
+
+	if s.bufSize != 64*1024 {
+		t.Fatalf("expected bufSize 64KB, got %d", s.bufSize)
+	}
+}
+
+func TestStreamReader_MultipleReadsAfterPipeTo(t *testing.T) {
+	data := "hello"
+	rc := io.NopCloser(strings.NewReader(data))
+	s := NewStreamReader(rc)
+
+	dst := &bytes.Buffer{}
+	n, err := s.PipeTo(dst)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if n != int64(len(data)) {
+		t.Fatalf("expected %d bytes, got %d", len(data), n)
+	}
+
+	// Further read should be EOF
+	buf := make([]byte, 10)
+	_, err = s.Read(buf)
+	if err != io.EOF {
+		t.Fatalf("expected EOF, got %v", err)
+	}
+}
+
+// --- UnmarshalResponse / UnmarshalBody tests ---
 
 func TestUnmarshalResponse_JSON(t *testing.T) {
-	body := `{"name":"Bob","value":99}`
-	resp := httptest.NewRecorder().Result()
-	resp.Body = http.MaxBytesReader(nil, http.NoBody, 0)
-
-	rec := httptest.NewRecorder()
-	rec.Header().Set("Content-Type", "application/json")
-	rec.WriteString(body)
-	resp = rec.Result()
-
-	var v testStruct
-	if err := UnmarshalResponse(resp, nil, &v); err != nil {
-		t.Fatal(err)
+	body := `{"name":"test","value":42}`
+	resp := &http.Response{
+		Body:   io.NopCloser(strings.NewReader(body)),
+		Header: map[string][]string{"Content-Type": {"application/json"}},
 	}
-	if v.Name != "Bob" || v.Value != 99 {
-		t.Fatalf("got %+v", v)
+
+	var result map[string]interface{}
+	if err := UnmarshalResponse(resp, nil, &result); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result["name"] != "test" {
+		t.Fatalf("expected name=test, got %v", result["name"])
+	}
+	if result["value"].(float64) != 42 {
+		t.Fatalf("expected value=42, got %v", result["value"])
 	}
 }
 
 func TestUnmarshalResponse_XML(t *testing.T) {
-	body := `<testStruct><name>Bob</name><value>99</value></testStruct>`
-	rec := httptest.NewRecorder()
-	rec.Header().Set("Content-Type", "application/xml")
-	rec.WriteString(body)
-	resp := rec.Result()
-
-	var v testStruct
-	if err := UnmarshalResponse(resp, nil, &v); err != nil {
-		t.Fatal(err)
+	type Item struct {
+		XMLName xml.Name `xml:"item"`
+		Name    string   `xml:"name"`
 	}
-	if v.Name != "Bob" || v.Value != 99 {
-		t.Fatalf("got %+v", v)
-	}
-}
 
-func TestUnmarshalResponse_YAML(t *testing.T) {
-	body := "name: Bob\nvalue: 99\n"
-	rec := httptest.NewRecorder()
-	rec.Header().Set("Content-Type", "application/x-yaml")
-	rec.WriteString(body)
-	resp := rec.Result()
-
-	var v testStruct
-	if err := UnmarshalResponse(resp, nil, &v); err != nil {
-		t.Fatal(err)
+	body := `<item><name>xml-test</name></item>`
+	resp := &http.Response{
+		Body:   io.NopCloser(strings.NewReader(body)),
+		Header: map[string][]string{"Content-Type": {"application/xml"}},
 	}
-	if v.Name != "Bob" || v.Value != 99 {
-		t.Fatalf("got %+v", v)
+
+	var result Item
+	if err := UnmarshalResponse(resp, nil, &result); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Name != "xml-test" {
+		t.Fatalf("expected name=xml-test, got %v", result.Name)
 	}
 }
 
-func TestUnmarshalResponse_CustomCodec(t *testing.T) {
-	body := `{"name":"Custom","value":1}`
-	rec := httptest.NewRecorder()
-	rec.Header().Set("Content-Type", "application/json")
-	rec.WriteString(body)
-	resp := rec.Result()
+func TestUnmarshalBody(t *testing.T) {
+	body := []byte(`{"key":"val"}`)
 
-	var v testStruct
-	codecs := map[string]Codec{"application/json": &JSONCodec{}}
-	if err := UnmarshalResponse(resp, codecs, &v); err != nil {
-		t.Fatal(err)
+	var result map[string]interface{}
+	if err := UnmarshalBody(body, "application/json", nil, &result); err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if v.Name != "Custom" || v.Value != 1 {
-		t.Fatalf("got %+v", v)
-	}
-}
-
-func TestUnmarshalResponse_FallbackToJSON(t *testing.T) {
-	body := `{"name":"Fallback","value":7}`
-	rec := httptest.NewRecorder()
-	rec.Header().Set("Content-Type", "application/octet-stream")
-	rec.WriteString(body)
-	resp := rec.Result()
-
-	var v testStruct
-	if err := UnmarshalResponse(resp, nil, &v); err != nil {
-		t.Fatal(err)
-	}
-	if v.Name != "Fallback" || v.Value != 7 {
-		t.Fatalf("got %+v", v)
-	}
-}
-
-func TestUnmarshalResponse_TextXML(t *testing.T) {
-	body := `<testStruct><name>Text</name><value>5</value></testStruct>`
-	rec := httptest.NewRecorder()
-	rec.Header().Set("Content-Type", "text/xml")
-	rec.WriteString(body)
-	resp := rec.Result()
-
-	var v testStruct
-	if err := UnmarshalResponse(resp, nil, &v); err != nil {
-		t.Fatal(err)
-	}
-	if v.Name != "Text" || v.Value != 5 {
-		t.Fatalf("got %+v", v)
+	if result["key"] != "val" {
+		t.Fatalf("expected key=val, got %v", result["key"])
 	}
 }

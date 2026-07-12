@@ -7,10 +7,10 @@ import (
 	"context"
 	"net/http"
 	"strings"
-	"bytes"
 	"fmt"
 	"io"
 	"sync"
+	"bytes"
 	"encoding/json"
 	nooaclient "github.com/arkannsk/nooa/client"
 	customtypes "github.com/arkannsk/nooa/examples/models/12_custom_types"
@@ -172,19 +172,24 @@ func (r *POSTAliasesResponse) Close() error {
 }
 
 // Body returns an io.ReadCloser for the response body.
-// After the body is read (e.g. via StatusOk()), a new reader over the cached data is returned.
+// If the body was cached (via StatusOk or a prior read), each call
+// returns a reset reader so the body can be read multiple times.
 func (r *POSTAliasesResponse) Body() io.ReadCloser {
-	if r.resp != nil {
-		return r.resp.Body
+	if r.resp == nil {
+		return nil
 	}
-	return nil
+	if seeker, ok := r.resp.Body.(io.Seeker); ok {
+		seeker.Seek(0, io.SeekStart)
+	}
+	return r.resp.Body
 }
 
 // Stream returns a nooaclient.StreamReader for buffered streaming of the response body.
-// It reads the body once and caches it, so subsequent calls return a reader over the same data.
+// It streams directly from resp.Body without caching, so the body is consumed.
+// Do not call StatusOk() or Body() after Stream() — the body will be exhausted.
 // Use StreamOption (WithBufferSize, WithProgress) to configure the stream.
 func (r *POSTAliasesResponse) Stream(opts ...nooaclient.StreamOption) *nooaclient.StreamReader {
-	if err := r.readBody(); err != nil {
+	if r.resp == nil {
 		return nil
 	}
 	opts = append(opts, nooaclient.WithTotal(r.resp.ContentLength))
@@ -192,7 +197,7 @@ func (r *POSTAliasesResponse) Stream(opts ...nooaclient.StreamOption) *nooaclien
 }
 
 // readBody reads the response body once and replaces resp.Body with a cached reader
-// so subsequent reads (Body(), further Status* calls) can reuse the data.
+// (bytes.Reader wrapped as io.ReadCloser) so subsequent reads can reuse the data.
 func (r *POSTAliasesResponse) readBody() error {
 	var err error
 	r.bodyOnce.Do(func() {
@@ -201,7 +206,7 @@ func (r *POSTAliasesResponse) readBody() error {
 			err = readErr
 			return
 		}
-		r.resp.Body = io.NopCloser(bytes.NewReader(data))
+		r.resp.Body = nooaclient.NewCachedBodyReader(data)
 	})
 	return err
 }
@@ -250,19 +255,24 @@ func (r *POSTCustomreaderResponse) Close() error {
 }
 
 // Body returns an io.ReadCloser for the response body.
-// After the body is read (e.g. via StatusOk()), a new reader over the cached data is returned.
+// If the body was cached (via StatusOk or a prior read), each call
+// returns a reset reader so the body can be read multiple times.
 func (r *POSTCustomreaderResponse) Body() io.ReadCloser {
-	if r.resp != nil {
-		return r.resp.Body
+	if r.resp == nil {
+		return nil
 	}
-	return nil
+	if seeker, ok := r.resp.Body.(io.Seeker); ok {
+		seeker.Seek(0, io.SeekStart)
+	}
+	return r.resp.Body
 }
 
 // Stream returns a nooaclient.StreamReader for buffered streaming of the response body.
-// It reads the body once and caches it, so subsequent calls return a reader over the same data.
+// It streams directly from resp.Body without caching, so the body is consumed.
+// Do not call StatusOk() or Body() after Stream() — the body will be exhausted.
 // Use StreamOption (WithBufferSize, WithProgress) to configure the stream.
 func (r *POSTCustomreaderResponse) Stream(opts ...nooaclient.StreamOption) *nooaclient.StreamReader {
-	if err := r.readBody(); err != nil {
+	if r.resp == nil {
 		return nil
 	}
 	opts = append(opts, nooaclient.WithTotal(r.resp.ContentLength))
@@ -270,7 +280,7 @@ func (r *POSTCustomreaderResponse) Stream(opts ...nooaclient.StreamOption) *nooa
 }
 
 // readBody reads the response body once and replaces resp.Body with a cached reader
-// so subsequent reads (Body(), further Status* calls) can reuse the data.
+// (bytes.Reader wrapped as io.ReadCloser) so subsequent reads can reuse the data.
 func (r *POSTCustomreaderResponse) readBody() error {
 	var err error
 	r.bodyOnce.Do(func() {
@@ -279,7 +289,7 @@ func (r *POSTCustomreaderResponse) readBody() error {
 			err = readErr
 			return
 		}
-		r.resp.Body = io.NopCloser(bytes.NewReader(data))
+		r.resp.Body = nooaclient.NewCachedBodyReader(data)
 	})
 	return err
 }
@@ -328,19 +338,24 @@ func (r *GETEmbedResponse) Close() error {
 }
 
 // Body returns an io.ReadCloser for the response body.
-// After the body is read (e.g. via StatusOk()), a new reader over the cached data is returned.
+// If the body was cached (via StatusOk or a prior read), each call
+// returns a reset reader so the body can be read multiple times.
 func (r *GETEmbedResponse) Body() io.ReadCloser {
-	if r.resp != nil {
-		return r.resp.Body
+	if r.resp == nil {
+		return nil
 	}
-	return nil
+	if seeker, ok := r.resp.Body.(io.Seeker); ok {
+		seeker.Seek(0, io.SeekStart)
+	}
+	return r.resp.Body
 }
 
 // Stream returns a nooaclient.StreamReader for buffered streaming of the response body.
-// It reads the body once and caches it, so subsequent calls return a reader over the same data.
+// It streams directly from resp.Body without caching, so the body is consumed.
+// Do not call StatusOk() or Body() after Stream() — the body will be exhausted.
 // Use StreamOption (WithBufferSize, WithProgress) to configure the stream.
 func (r *GETEmbedResponse) Stream(opts ...nooaclient.StreamOption) *nooaclient.StreamReader {
-	if err := r.readBody(); err != nil {
+	if r.resp == nil {
 		return nil
 	}
 	opts = append(opts, nooaclient.WithTotal(r.resp.ContentLength))
@@ -348,7 +363,7 @@ func (r *GETEmbedResponse) Stream(opts ...nooaclient.StreamOption) *nooaclient.S
 }
 
 // readBody reads the response body once and replaces resp.Body with a cached reader
-// so subsequent reads (Body(), further Status* calls) can reuse the data.
+// (bytes.Reader wrapped as io.ReadCloser) so subsequent reads can reuse the data.
 func (r *GETEmbedResponse) readBody() error {
 	var err error
 	r.bodyOnce.Do(func() {
@@ -357,7 +372,7 @@ func (r *GETEmbedResponse) readBody() error {
 			err = readErr
 			return
 		}
-		r.resp.Body = io.NopCloser(bytes.NewReader(data))
+		r.resp.Body = nooaclient.NewCachedBodyReader(data)
 	})
 	return err
 }
