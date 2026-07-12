@@ -1,6 +1,6 @@
 package main
 
-//go:generate go run github.com/arkannsk/nooa/cmd/clientgen -pkg . -out ../../clients/05_generics/client.go
+//go:generate go run github.com/arkannsk/nooa/cmd/clientgen -pkg . -out ../../../examples/elval-integration/clients/05_generics/
 
 import (
 	"encoding/json"

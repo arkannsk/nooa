@@ -5,13 +5,13 @@ package validatorsdemo
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"net/http"
 	"strings"
+	"fmt"
+	"io"
 	"bytes"
 	"encoding/json"
-	"github.com/arkannsk/nooa/client"
+	nooaclient "github.com/arkannsk/nooa/client"
 	validators "github.com/arkannsk/nooa/examples/models/10_validators"
 )
 
@@ -30,287 +30,298 @@ func (s *stdHTTPClient) Do(ctx context.Context, req *http.Request) (*http.Respon
 	return s.Client.Do(req.WithContext(ctx))
 }
 
-// Client is the generated HTTP client for 10 Validators Demo.
-type Client struct {
+// httpc is the internal HTTP client shared by all tag adapters.
+type httpc struct {
 	BaseURL    string
 	HTTPClient HTTPClient
-
-	// Codec maps Content-Type to client.Codec for response body decoding.
-	// If nil, defaults to JSON decoding for all types.
-	Codec map[string]client.Codec
+	Codec      map[string]nooaclient.Codec
 }
 
-// New creates a new Client.
-// If hc is nil, a default *http.Client is used.
-// If hc is *http.Client, it is automatically wrapped.
-func New(baseURL string, hc any) *Client {
-	var client HTTPClient
+func newHTTPC(baseURL string, hc any) *httpc {
+	var httpClient HTTPClient
 	switch v := hc.(type) {
 	case nil:
-		client = &stdHTTPClient{Client: &http.Client{}}
+		httpClient = &stdHTTPClient{Client: &http.Client{}}
 	case *http.Client:
-		client = &stdHTTPClient{Client: v}
+		httpClient = &stdHTTPClient{Client: v}
 	case HTTPClient:
-		client = v
+		httpClient = v
 	default:
-		client = &stdHTTPClient{Client: &http.Client{}}
+		httpClient = &stdHTTPClient{Client: &http.Client{}}
 	}
-	return &Client{
+	return &httpc{
 		BaseURL:    strings.TrimRight(baseURL, "/"),
-		HTTPClient: client,
+		HTTPClient: httpClient,
 	}
 }
+// V1 is the HTTP client for 10 Validators Demo.
+type V1 struct {
+	base *httpc
+}
 
+// New creates a new V1 client.
+// If hc is nil, a default *http.Client is used.
+// If hc is *http.Client, it is automatically wrapped.
+func New(baseURL string, hc any) *V1 {
+	return &V1{base: newHTTPC(baseURL, hc)}
+}
 
 // Validate date and duration fields
 // POST /validate/date
-
-
-// POSTValidateDateResponse holds the response for POSTValidateDate.
-type POSTValidateDateResponse struct {
-	*http.Response
-	client *Client
-	status200 *validators.DateAndDurationValidators
-}
-
-func (r *POSTValidateDateResponse) StatusOk() (*validators.DateAndDurationValidators, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
-	}
-	if r.status200 != nil {
-		return r.status200, nil
-	}
-	r.status200 = new(validators.DateAndDurationValidators)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
-		return nil, err
-	}
-	return r.status200, nil
-}
-
-// POSTValidateDate — Validate date and duration fields
-// POST /validate/date
-func (c *Client) POSTValidateDate(ctx context.Context, input *validators.DateAndDurationValidators) (*POSTValidateDateResponse, error) {
-
-	u := c.BaseURL + "/validate/date"
-
-
-
+func (c *V1) POSTValidateDate(ctx context.Context, input *validators.DateAndDurationValidators) (*POSTValidateDateResponse, error) {
 	var body io.Reader
-	b, err := json.Marshal(input)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request body: %w", err)
+	if input != nil {
+		b, err := json.Marshal(input)
+		if err != nil {
+			return nil, fmt.Errorf("marshal request body: %w", err)
+		}
+		body = bytes.NewReader(b)
 	}
-	body = bytes.NewReader(b)
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", u, body)
+	path := "/validate/date"
+
+	requestURL := c.base.BaseURL + path
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", requestURL, body)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
+	httpResp, err := c.base.HTTPClient.Do(ctx, httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
+		return nil, fmt.Errorf("execute request: %w", err)
 	}
+	defer httpResp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	rawBody, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response body: %w", err)
 	}
 	return &POSTValidateDateResponse{
-		Response: resp,
-		client:   c,
+		StatusCode: httpResp.StatusCode,
+		RawBody:    rawBody,
+		httpc:      c.base,
 	}, nil
 }
-
-
 
 // Validate enum and slice fields
 // POST /validate/enum-slice
-
-
-// POSTValidateEnumsliceResponse holds the response for POSTValidateEnumslice.
-type POSTValidateEnumsliceResponse struct {
-	*http.Response
-	client *Client
-	status200 *validators.AllEnumAndSliceValidators
-}
-
-func (r *POSTValidateEnumsliceResponse) StatusOk() (*validators.AllEnumAndSliceValidators, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
-	}
-	if r.status200 != nil {
-		return r.status200, nil
-	}
-	r.status200 = new(validators.AllEnumAndSliceValidators)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
-		return nil, err
-	}
-	return r.status200, nil
-}
-
-// POSTValidateEnumslice — Validate enum and slice fields
-// POST /validate/enum-slice
-func (c *Client) POSTValidateEnumslice(ctx context.Context, input *validators.AllEnumAndSliceValidators) (*POSTValidateEnumsliceResponse, error) {
-
-	u := c.BaseURL + "/validate/enum-slice"
-
-
-
+func (c *V1) POSTValidateEnumslice(ctx context.Context, input *validators.AllEnumAndSliceValidators) (*POSTValidateEnumsliceResponse, error) {
 	var body io.Reader
-	b, err := json.Marshal(input)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request body: %w", err)
+	if input != nil {
+		b, err := json.Marshal(input)
+		if err != nil {
+			return nil, fmt.Errorf("marshal request body: %w", err)
+		}
+		body = bytes.NewReader(b)
 	}
-	body = bytes.NewReader(b)
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", u, body)
+	path := "/validate/enum-slice"
+
+	requestURL := c.base.BaseURL + path
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", requestURL, body)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
+	httpResp, err := c.base.HTTPClient.Do(ctx, httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
+		return nil, fmt.Errorf("execute request: %w", err)
 	}
+	defer httpResp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	rawBody, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response body: %w", err)
 	}
 	return &POSTValidateEnumsliceResponse{
-		Response: resp,
-		client:   c,
+		StatusCode: httpResp.StatusCode,
+		RawBody:    rawBody,
+		httpc:      c.base,
 	}, nil
 }
-
-
 
 // Validate numeric fields
 // POST /validate/numeric
-
-
-// POSTValidateNumericResponse holds the response for POSTValidateNumeric.
-type POSTValidateNumericResponse struct {
-	*http.Response
-	client *Client
-	status200 *validators.AllNumericValidators
-}
-
-func (r *POSTValidateNumericResponse) StatusOk() (*validators.AllNumericValidators, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
-	}
-	if r.status200 != nil {
-		return r.status200, nil
-	}
-	r.status200 = new(validators.AllNumericValidators)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
-		return nil, err
-	}
-	return r.status200, nil
-}
-
-// POSTValidateNumeric — Validate numeric fields
-// POST /validate/numeric
-func (c *Client) POSTValidateNumeric(ctx context.Context, input *validators.AllNumericValidators) (*POSTValidateNumericResponse, error) {
-
-	u := c.BaseURL + "/validate/numeric"
-
-
-
+func (c *V1) POSTValidateNumeric(ctx context.Context, input *validators.AllNumericValidators) (*POSTValidateNumericResponse, error) {
 	var body io.Reader
-	b, err := json.Marshal(input)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request body: %w", err)
+	if input != nil {
+		b, err := json.Marshal(input)
+		if err != nil {
+			return nil, fmt.Errorf("marshal request body: %w", err)
+		}
+		body = bytes.NewReader(b)
 	}
-	body = bytes.NewReader(b)
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", u, body)
+	path := "/validate/numeric"
+
+	requestURL := c.base.BaseURL + path
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", requestURL, body)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
+	httpResp, err := c.base.HTTPClient.Do(ctx, httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
+		return nil, fmt.Errorf("execute request: %w", err)
 	}
+	defer httpResp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	rawBody, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response body: %w", err)
 	}
 	return &POSTValidateNumericResponse{
-		Response: resp,
-		client:   c,
+		StatusCode: httpResp.StatusCode,
+		RawBody:    rawBody,
+		httpc:      c.base,
 	}, nil
 }
-
-
 
 // Validate string fields
 // POST /validate/string
-
-
-// POSTValidateStringResponse holds the response for POSTValidateString.
-type POSTValidateStringResponse struct {
-	*http.Response
-	client *Client
-	status200 *validators.AllStringValidators
-}
-
-func (r *POSTValidateStringResponse) StatusOk() (*validators.AllStringValidators, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
-	}
-	if r.status200 != nil {
-		return r.status200, nil
-	}
-	r.status200 = new(validators.AllStringValidators)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
-		return nil, err
-	}
-	return r.status200, nil
-}
-
-// POSTValidateString — Validate string fields
-// POST /validate/string
-func (c *Client) POSTValidateString(ctx context.Context, input *validators.AllStringValidators) (*POSTValidateStringResponse, error) {
-
-	u := c.BaseURL + "/validate/string"
-
-
-
+func (c *V1) POSTValidateString(ctx context.Context, input *validators.AllStringValidators) (*POSTValidateStringResponse, error) {
 	var body io.Reader
-	b, err := json.Marshal(input)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request body: %w", err)
+	if input != nil {
+		b, err := json.Marshal(input)
+		if err != nil {
+			return nil, fmt.Errorf("marshal request body: %w", err)
+		}
+		body = bytes.NewReader(b)
 	}
-	body = bytes.NewReader(b)
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", u, body)
+	path := "/validate/string"
+
+	requestURL := c.base.BaseURL + path
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", requestURL, body)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
+	httpResp, err := c.base.HTTPClient.Do(ctx, httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
+		return nil, fmt.Errorf("execute request: %w", err)
 	}
+	defer httpResp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	rawBody, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response body: %w", err)
 	}
 	return &POSTValidateStringResponse{
-		Response: resp,
-		client:   c,
+		StatusCode: httpResp.StatusCode,
+		RawBody:    rawBody,
+		httpc:      c.base,
 	}, nil
 }
 
+// POSTValidateDateResponse is the response for the POSTValidateDate operation.
+type POSTValidateDateResponse struct {
+	StatusCode int
+	RawBody    []byte
+	httpc      *httpc
+	status200 *validators.DateAndDurationValidators
+}
 
+// StatusOk returns the unmarshaled response body for status 200.
+func (r *POSTValidateDateResponse) StatusOk() (*validators.DateAndDurationValidators, error) {
+	if r.status200 != nil {
+		return r.status200, nil
+	}
+	if r.StatusCode != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	}
+	if r.RawBody == nil || len(r.RawBody) == 0 {
+		return nil, fmt.Errorf("empty response body")
+	}
+	r.status200 = new(validators.DateAndDurationValidators)
+	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
+		return nil, err
+	}
+	return r.status200, nil
+}
 
+// POSTValidateEnumsliceResponse is the response for the POSTValidateEnumslice operation.
+type POSTValidateEnumsliceResponse struct {
+	StatusCode int
+	RawBody    []byte
+	httpc      *httpc
+	status200 *validators.AllEnumAndSliceValidators
+}
+
+// StatusOk returns the unmarshaled response body for status 200.
+func (r *POSTValidateEnumsliceResponse) StatusOk() (*validators.AllEnumAndSliceValidators, error) {
+	if r.status200 != nil {
+		return r.status200, nil
+	}
+	if r.StatusCode != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	}
+	if r.RawBody == nil || len(r.RawBody) == 0 {
+		return nil, fmt.Errorf("empty response body")
+	}
+	r.status200 = new(validators.AllEnumAndSliceValidators)
+	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
+		return nil, err
+	}
+	return r.status200, nil
+}
+
+// POSTValidateNumericResponse is the response for the POSTValidateNumeric operation.
+type POSTValidateNumericResponse struct {
+	StatusCode int
+	RawBody    []byte
+	httpc      *httpc
+	status200 *validators.AllNumericValidators
+}
+
+// StatusOk returns the unmarshaled response body for status 200.
+func (r *POSTValidateNumericResponse) StatusOk() (*validators.AllNumericValidators, error) {
+	if r.status200 != nil {
+		return r.status200, nil
+	}
+	if r.StatusCode != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	}
+	if r.RawBody == nil || len(r.RawBody) == 0 {
+		return nil, fmt.Errorf("empty response body")
+	}
+	r.status200 = new(validators.AllNumericValidators)
+	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
+		return nil, err
+	}
+	return r.status200, nil
+}
+
+// POSTValidateStringResponse is the response for the POSTValidateString operation.
+type POSTValidateStringResponse struct {
+	StatusCode int
+	RawBody    []byte
+	httpc      *httpc
+	status200 *validators.AllStringValidators
+}
+
+// StatusOk returns the unmarshaled response body for status 200.
+func (r *POSTValidateStringResponse) StatusOk() (*validators.AllStringValidators, error) {
+	if r.status200 != nil {
+		return r.status200, nil
+	}
+	if r.StatusCode != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	}
+	if r.RawBody == nil || len(r.RawBody) == 0 {
+		return nil, fmt.Errorf("empty response body")
+	}
+	r.status200 = new(validators.AllStringValidators)
+	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
+		return nil, err
+	}
+	return r.status200, nil
+}

@@ -5,15 +5,9 @@ package mixedfeaturesdemo
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"net/http"
 	"strings"
-	"net/url"
-	"bytes"
-	"encoding/json"
-	"github.com/arkannsk/nooa/client"
-	mixed "github.com/arkannsk/nooa/examples/models/13_mixed"
+	nooaclient "github.com/arkannsk/nooa/client"
 )
 
 // HTTPClient is the interface for executing HTTP requests.
@@ -31,342 +25,49 @@ func (s *stdHTTPClient) Do(ctx context.Context, req *http.Request) (*http.Respon
 	return s.Client.Do(req.WithContext(ctx))
 }
 
-// Client is the generated HTTP client for 13 Mixed Features Demo.
-type Client struct {
+// httpc is the internal HTTP client shared by all tag adapters.
+type httpc struct {
 	BaseURL    string
 	HTTPClient HTTPClient
-
-	// Codec maps Content-Type to client.Codec for response body decoding.
-	// If nil, defaults to JSON decoding for all types.
-	Codec map[string]client.Codec
+	Codec      map[string]nooaclient.Codec
 }
 
-// New creates a new Client.
-// If hc is nil, a default *http.Client is used.
-// If hc is *http.Client, it is automatically wrapped.
-func New(baseURL string, hc any) *Client {
-	var client HTTPClient
+func newHTTPC(baseURL string, hc any) *httpc {
+	var httpClient HTTPClient
 	switch v := hc.(type) {
 	case nil:
-		client = &stdHTTPClient{Client: &http.Client{}}
+		httpClient = &stdHTTPClient{Client: &http.Client{}}
 	case *http.Client:
-		client = &stdHTTPClient{Client: v}
+		httpClient = &stdHTTPClient{Client: v}
 	case HTTPClient:
-		client = v
+		httpClient = v
 	default:
-		client = &stdHTTPClient{Client: &http.Client{}}
+		httpClient = &stdHTTPClient{Client: &http.Client{}}
 	}
-	return &Client{
+	return &httpc{
 		BaseURL:    strings.TrimRight(baseURL, "/"),
-		HTTPClient: client,
+		HTTPClient: httpClient,
 	}
 }
-
-
-// Get address
-// GET /address
-
-
-// GETAddressResponse holds the response for GETAddress.
-type GETAddressResponse struct {
-	*http.Response
-	client *Client
-	status200 *mixed.Address
+// V1 is the top-level client for 13 Mixed Features Demo.
+// It provides tag-scoped sub-clients for each API group.
+type V1 struct {
+	// Mixed provides access to the "Mixed" operations.
+	Mixed MixedClient
+	// Nested provides access to the "Nested" operations.
+	Nested NestedClient
+	// Variants provides access to the "Variants" operations.
+	Variants VariantsClient
 }
 
-func (r *GETAddressResponse) StatusOk() (*mixed.Address, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+// New creates a new V1 client.
+// If hc is nil, a default *http.Client is used.
+// If hc is *http.Client, it is automatically wrapped.
+func New(baseURL string, hc any) *V1 {
+	c := newHTTPC(baseURL, hc)
+	return &V1{
+		Mixed: &mixedAdapter{httpc: c},
+		Nested: &nestedAdapter{httpc: c},
+		Variants: &variantsAdapter{httpc: c},
 	}
-	if r.status200 != nil {
-		return r.status200, nil
-	}
-	r.status200 = new(mixed.Address)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
-		return nil, err
-	}
-	return r.status200, nil
 }
-
-// GETAddress — Get address
-// GET /address
-func (c *Client) GETAddress(ctx context.Context, input *mixed.Address) (*GETAddressResponse, error) {
-
-	u := c.BaseURL + "/address"
-
-
-
-	var body io.Reader
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", u, body)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
-	}
-	return &GETAddressResponse{
-		Response: resp,
-		client:   c,
-	}, nil
-}
-
-
-
-// Create mega struct
-// POST /mega
-
-
-// POSTMegaResponse holds the response for POSTMega.
-type POSTMegaResponse struct {
-	*http.Response
-	client *Client
-	status200 *mixed.MegaStruct
-}
-
-func (r *POSTMegaResponse) StatusOk() (*mixed.MegaStruct, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
-	}
-	if r.status200 != nil {
-		return r.status200, nil
-	}
-	r.status200 = new(mixed.MegaStruct)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
-		return nil, err
-	}
-	return r.status200, nil
-}
-
-// POSTMega — Create mega struct
-// POST /mega
-func (c *Client) POSTMega(ctx context.Context, input *mixed.MegaStruct) (*POSTMegaResponse, error) {
-
-	u := c.BaseURL + "/mega"
-
-
-	// Query parameters
-	query := url.Values{}
-	query.Set("includedeleted", fmt.Sprintf("%v", input.IncludeDeleted))
-	if len(query) > 0 {
-		u += "?" + query.Encode()
-	}
-
-	var body io.Reader
-	b, err := json.Marshal(input)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request body: %w", err)
-	}
-	body = bytes.NewReader(b)
-
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", u, body)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	httpReq.Header.Set("apiversion", fmt.Sprintf("%v", input.APIVersion))
-
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
-	}
-	return &POSTMegaResponse{
-		Response: resp,
-		client:   c,
-	}, nil
-}
-
-
-
-// Get mega struct from HTTP parameters
-// GET /mega
-
-
-// GETMegaResponse holds the response for GETMega.
-type GETMegaResponse struct {
-	*http.Response
-	client *Client
-	status200 *mixed.MegaStruct
-}
-
-func (r *GETMegaResponse) StatusOk() (*mixed.MegaStruct, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
-	}
-	if r.status200 != nil {
-		return r.status200, nil
-	}
-	r.status200 = new(mixed.MegaStruct)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
-		return nil, err
-	}
-	return r.status200, nil
-}
-
-// GETMega — Get mega struct from HTTP parameters
-// GET /mega
-func (c *Client) GETMega(ctx context.Context, input *mixed.MegaStruct) (*GETMegaResponse, error) {
-
-	u := c.BaseURL + "/mega"
-
-
-	// Query parameters
-	query := url.Values{}
-	query.Set("includedeleted", fmt.Sprintf("%v", input.IncludeDeleted))
-	if len(query) > 0 {
-		u += "?" + query.Encode()
-	}
-
-	var body io.Reader
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", u, body)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-
-	httpReq.Header.Set("apiversion", fmt.Sprintf("%v", input.APIVersion))
-
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
-	}
-	return &GETMegaResponse{
-		Response: resp,
-		client:   c,
-	}, nil
-}
-
-
-
-// Get admin variant
-// GET /variant/admin
-
-
-// GETVariantAdminResponse holds the response for GETVariantAdmin.
-type GETVariantAdminResponse struct {
-	*http.Response
-	client *Client
-	status200 *mixed.AdminVariant
-}
-
-func (r *GETVariantAdminResponse) StatusOk() (*mixed.AdminVariant, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
-	}
-	if r.status200 != nil {
-		return r.status200, nil
-	}
-	r.status200 = new(mixed.AdminVariant)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
-		return nil, err
-	}
-	return r.status200, nil
-}
-
-// GETVariantAdmin — Get admin variant
-// GET /variant/admin
-func (c *Client) GETVariantAdmin(ctx context.Context, input *mixed.AdminVariant) (*GETVariantAdminResponse, error) {
-
-	u := c.BaseURL + "/variant/admin"
-
-
-
-	var body io.Reader
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", u, body)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
-	}
-	return &GETVariantAdminResponse{
-		Response: resp,
-		client:   c,
-	}, nil
-}
-
-
-
-// Get user variant
-// GET /variant/user
-
-
-// GETVariantUserResponse holds the response for GETVariantUser.
-type GETVariantUserResponse struct {
-	*http.Response
-	client *Client
-	status200 *mixed.UserVariant
-}
-
-func (r *GETVariantUserResponse) StatusOk() (*mixed.UserVariant, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
-	}
-	if r.status200 != nil {
-		return r.status200, nil
-	}
-	r.status200 = new(mixed.UserVariant)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
-		return nil, err
-	}
-	return r.status200, nil
-}
-
-// GETVariantUser — Get user variant
-// GET /variant/user
-func (c *Client) GETVariantUser(ctx context.Context, input *mixed.UserVariant) (*GETVariantUserResponse, error) {
-
-	u := c.BaseURL + "/variant/user"
-
-
-
-	var body io.Reader
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", u, body)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
-	}
-	return &GETVariantUserResponse{
-		Response: resp,
-		client:   c,
-	}, nil
-}
-
-
-

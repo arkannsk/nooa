@@ -5,14 +5,9 @@ package responsecontentdemo
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"net/http"
 	"strings"
-	"bytes"
-	"encoding/json"
-	"github.com/arkannsk/nooa/client"
-	responsecontent "github.com/arkannsk/nooa/examples/models/15_response_content"
+	nooaclient "github.com/arkannsk/nooa/client"
 )
 
 // HTTPClient is the interface for executing HTTP requests.
@@ -30,393 +25,46 @@ func (s *stdHTTPClient) Do(ctx context.Context, req *http.Request) (*http.Respon
 	return s.Client.Do(req.WithContext(ctx))
 }
 
-// Client is the generated HTTP client for 15 Response Content Demo.
-type Client struct {
+// httpc is the internal HTTP client shared by all tag adapters.
+type httpc struct {
 	BaseURL    string
 	HTTPClient HTTPClient
-
-	// Codec maps Content-Type to client.Codec for response body decoding.
-	// If nil, defaults to JSON decoding for all types.
-	Codec map[string]client.Codec
+	Codec      map[string]nooaclient.Codec
 }
 
-// New creates a new Client.
-// If hc is nil, a default *http.Client is used.
-// If hc is *http.Client, it is automatically wrapped.
-func New(baseURL string, hc any) *Client {
-	var client HTTPClient
+func newHTTPC(baseURL string, hc any) *httpc {
+	var httpClient HTTPClient
 	switch v := hc.(type) {
 	case nil:
-		client = &stdHTTPClient{Client: &http.Client{}}
+		httpClient = &stdHTTPClient{Client: &http.Client{}}
 	case *http.Client:
-		client = &stdHTTPClient{Client: v}
+		httpClient = &stdHTTPClient{Client: v}
 	case HTTPClient:
-		client = v
+		httpClient = v
 	default:
-		client = &stdHTTPClient{Client: &http.Client{}}
+		httpClient = &stdHTTPClient{Client: &http.Client{}}
 	}
-	return &Client{
+	return &httpc{
 		BaseURL:    strings.TrimRight(baseURL, "/"),
-		HTTPClient: client,
+		HTTPClient: httpClient,
 	}
 }
-
-
-// Create user
-// POST /create
-
-
-// POSTCreateResponse holds the response for POSTCreate.
-type POSTCreateResponse struct {
-	*http.Response
-	client *Client
-	status201 *responsecontent.CreateUserResponse
+// V1 is the top-level client for 15 Response Content Demo.
+// It provides tag-scoped sub-clients for each API group.
+type V1 struct {
+	// MultiStatus provides access to the "MultiStatus" operations.
+	MultiStatus MultiStatusClient
+	// Responses provides access to the "Responses" operations.
+	Responses ResponsesClient
 }
 
-func (r *POSTCreateResponse) StatusCreated() (*responsecontent.CreateUserResponse, error) {
-	if r.StatusCode != 201 {
-		return nil, fmt.Errorf("expected status 201, got %d", r.StatusCode)
+// New creates a new V1 client.
+// If hc is nil, a default *http.Client is used.
+// If hc is *http.Client, it is automatically wrapped.
+func New(baseURL string, hc any) *V1 {
+	c := newHTTPC(baseURL, hc)
+	return &V1{
+		MultiStatus: &multiStatusAdapter{httpc: c},
+		Responses: &responsesAdapter{httpc: c},
 	}
-	if r.status201 != nil {
-		return r.status201, nil
-	}
-	r.status201 = new(responsecontent.CreateUserResponse)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status201); err != nil {
-		return nil, err
-	}
-	return r.status201, nil
 }
-
-// POSTCreate — Create user
-// POST /create
-func (c *Client) POSTCreate(ctx context.Context, input *responsecontent.CreateUserResponse) (*POSTCreateResponse, error) {
-
-	u := c.BaseURL + "/create"
-
-
-
-	var body io.Reader
-	b, err := json.Marshal(input)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request body: %w", err)
-	}
-	body = bytes.NewReader(b)
-
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", u, body)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
-	}
-	return &POSTCreateResponse{
-		Response: resp,
-		client:   c,
-	}, nil
-}
-
-
-
-// Error response
-// POST /error
-
-
-// POSTErrorResponse holds the response for POSTError.
-type POSTErrorResponse struct {
-	*http.Response
-	client *Client
-	status200 *responsecontent.ErrorResponse
-}
-
-func (r *POSTErrorResponse) StatusOk() (*responsecontent.ErrorResponse, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
-	}
-	if r.status200 != nil {
-		return r.status200, nil
-	}
-	r.status200 = new(responsecontent.ErrorResponse)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
-		return nil, err
-	}
-	return r.status200, nil
-}
-
-// POSTError — Error response
-// POST /error
-func (c *Client) POSTError(ctx context.Context, opts ...client.RequestOption) (*POSTErrorResponse, error) {
-
-	u := c.BaseURL + "/error"
-
-	var body io.Reader
-
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", u, body)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-	// Apply options
-	for _, opt := range opts {
-		opt(httpReq)
-	}
-
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
-	}
-	return &POSTErrorResponse{
-		Response: resp,
-		client:   c,
-	}, nil
-}
-
-
-
-// Multiple response codes
-// GET /multi
-
-
-// GETMultiResponse holds the response for GETMulti.
-type GETMultiResponse struct {
-	*http.Response
-	client *Client
-	status200 *responsecontent.MultipleResponses
-}
-
-func (r *GETMultiResponse) StatusOk() (*responsecontent.MultipleResponses, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
-	}
-	if r.status200 != nil {
-		return r.status200, nil
-	}
-	r.status200 = new(responsecontent.MultipleResponses)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
-		return nil, err
-	}
-	return r.status200, nil
-}
-
-// GETMulti — Multiple response codes
-// GET /multi
-func (c *Client) GETMulti(ctx context.Context, opts ...client.RequestOption) (*GETMultiResponse, error) {
-
-	u := c.BaseURL + "/multi"
-
-	var body io.Reader
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", u, body)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-	// Apply options
-	for _, opt := range opts {
-		opt(httpReq)
-	}
-
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
-	}
-	return &GETMultiResponse{
-		Response: resp,
-		client:   c,
-	}, nil
-}
-
-
-
-// No response annotation
-// GET /no-content
-
-
-// GETNocontentResponse holds the response for GETNocontent.
-type GETNocontentResponse struct {
-	*http.Response
-	client *Client
-	status200 *responsecontent.NoContentType
-}
-
-func (r *GETNocontentResponse) StatusOk() (*responsecontent.NoContentType, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
-	}
-	if r.status200 != nil {
-		return r.status200, nil
-	}
-	r.status200 = new(responsecontent.NoContentType)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
-		return nil, err
-	}
-	return r.status200, nil
-}
-
-// GETNocontent — No response annotation
-// GET /no-content
-func (c *Client) GETNocontent(ctx context.Context, opts ...client.RequestOption) (*GETNocontentResponse, error) {
-
-	u := c.BaseURL + "/no-content"
-
-	var body io.Reader
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", u, body)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-	// Apply options
-	for _, opt := range opts {
-		opt(httpReq)
-	}
-
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
-	}
-	return &GETNocontentResponse{
-		Response: resp,
-		client:   c,
-	}, nil
-}
-
-
-
-// No media types
-// GET /no-media
-
-
-// GETNomediaResponse holds the response for GETNomedia.
-type GETNomediaResponse struct {
-	*http.Response
-	client *Client
-	status204 *responsecontent.NoMediaTypes
-}
-
-func (r *GETNomediaResponse) StatusNoContent() (*responsecontent.NoMediaTypes, error) {
-	if r.StatusCode != 204 {
-		return nil, fmt.Errorf("expected status 204, got %d", r.StatusCode)
-	}
-	if r.status204 != nil {
-		return r.status204, nil
-	}
-	r.status204 = new(responsecontent.NoMediaTypes)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status204); err != nil {
-		return nil, err
-	}
-	return r.status204, nil
-}
-
-// GETNomedia — No media types
-// GET /no-media
-func (c *Client) GETNomedia(ctx context.Context, opts ...client.RequestOption) (*GETNomediaResponse, error) {
-
-	u := c.BaseURL + "/no-media"
-
-	var body io.Reader
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", u, body)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-	// Apply options
-	for _, opt := range opts {
-		opt(httpReq)
-	}
-
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
-	}
-	return &GETNomediaResponse{
-		Response: resp,
-		client:   c,
-	}, nil
-}
-
-
-
-// Get user response
-// GET /user
-
-
-// GETUserResponse holds the response for GETUser.
-type GETUserResponse struct {
-	*http.Response
-	client *Client
-	status200 *responsecontent.UserResponse
-}
-
-func (r *GETUserResponse) StatusOk() (*responsecontent.UserResponse, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
-	}
-	if r.status200 != nil {
-		return r.status200, nil
-	}
-	r.status200 = new(responsecontent.UserResponse)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
-		return nil, err
-	}
-	return r.status200, nil
-}
-
-// GETUser — Get user response
-// GET /user
-func (c *Client) GETUser(ctx context.Context, opts ...client.RequestOption) (*GETUserResponse, error) {
-
-	u := c.BaseURL + "/user"
-
-	var body io.Reader
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", u, body)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-	// Apply options
-	for _, opt := range opts {
-		opt(httpReq)
-	}
-
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
-	}
-	return &GETUserResponse{
-		Response: resp,
-		client:   c,
-	}, nil
-}
-
-
-

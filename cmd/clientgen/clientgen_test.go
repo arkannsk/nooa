@@ -68,19 +68,19 @@ func TestGenerate_BasicTypes(t *testing.T) {
 	if !strings.Contains(result, "package basictypesdemo") {
 		t.Error("expected package declaration")
 	}
-	if !strings.Contains(result, "type Client struct") {
-		t.Error("expected Client struct")
+	if !strings.Contains(result, "type V1 struct") {
+		t.Error("expected V1 struct")
 	}
 	if !strings.Contains(result, "type HTTPClient interface") {
 		t.Error("expected HTTPClient interface")
 	}
-	if !strings.Contains(result, "func (c *Client) POSTDefaults") {
+	if !strings.Contains(result, "func (c *V1) POSTDefaults") {
 		t.Error("expected POSTDefaults method")
 	}
-	if !strings.Contains(result, "func (c *Client) GETPointers") {
+	if !strings.Contains(result, "func (c *V1) GETPointers") {
 		t.Error("expected GETPointers method")
 	}
-	if !strings.Contains(result, "func (c *Client) POSTPrimitives") {
+	if !strings.Contains(result, "func (c *V1) POSTPrimitives") {
 		t.Error("expected POSTPrimitives method")
 	}
 

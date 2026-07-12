@@ -5,12 +5,9 @@ package rewritedemo
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"net/http"
 	"strings"
-	"github.com/arkannsk/nooa/client"
-	rewrite "github.com/arkannsk/nooa/examples/models/07_rewrite"
+	nooaclient "github.com/arkannsk/nooa/client"
 )
 
 // HTTPClient is the interface for executing HTTP requests.
@@ -28,263 +25,46 @@ func (s *stdHTTPClient) Do(ctx context.Context, req *http.Request) (*http.Respon
 	return s.Client.Do(req.WithContext(ctx))
 }
 
-// Client is the generated HTTP client for 07 Rewrite Demo.
-type Client struct {
+// httpc is the internal HTTP client shared by all tag adapters.
+type httpc struct {
 	BaseURL    string
 	HTTPClient HTTPClient
-
-	// Codec maps Content-Type to client.Codec for response body decoding.
-	// If nil, defaults to JSON decoding for all types.
-	Codec map[string]client.Codec
+	Codec      map[string]nooaclient.Codec
 }
 
-// New creates a new Client.
-// If hc is nil, a default *http.Client is used.
-// If hc is *http.Client, it is automatically wrapped.
-func New(baseURL string, hc any) *Client {
-	var client HTTPClient
+func newHTTPC(baseURL string, hc any) *httpc {
+	var httpClient HTTPClient
 	switch v := hc.(type) {
 	case nil:
-		client = &stdHTTPClient{Client: &http.Client{}}
+		httpClient = &stdHTTPClient{Client: &http.Client{}}
 	case *http.Client:
-		client = &stdHTTPClient{Client: v}
+		httpClient = &stdHTTPClient{Client: v}
 	case HTTPClient:
-		client = v
+		httpClient = v
 	default:
-		client = &stdHTTPClient{Client: &http.Client{}}
+		httpClient = &stdHTTPClient{Client: &http.Client{}}
 	}
-	return &Client{
+	return &httpc{
 		BaseURL:    strings.TrimRight(baseURL, "/"),
-		HTTPClient: client,
+		HTTPClient: httpClient,
 	}
 }
-
-
-// Get location with geojson Feature
-// GET /geo-feature
-
-
-// GETGeofeatureResponse holds the response for GETGeofeature.
-type GETGeofeatureResponse struct {
-	*http.Response
-	client *Client
-	status200 *rewrite.CreateLocationRequest
+// V1 is the top-level client for 07 Rewrite Demo.
+// It provides tag-scoped sub-clients for each API group.
+type V1 struct {
+	// Geo provides access to the "Geo" operations.
+	Geo GeoClient
+	// Rewrite provides access to the "Rewrite" operations.
+	Rewrite RewriteClient
 }
 
-func (r *GETGeofeatureResponse) StatusOk() (*rewrite.CreateLocationRequest, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+// New creates a new V1 client.
+// If hc is nil, a default *http.Client is used.
+// If hc is *http.Client, it is automatically wrapped.
+func New(baseURL string, hc any) *V1 {
+	c := newHTTPC(baseURL, hc)
+	return &V1{
+		Geo: &geoAdapter{httpc: c},
+		Rewrite: &rewriteAdapter{httpc: c},
 	}
-	if r.status200 != nil {
-		return r.status200, nil
-	}
-	r.status200 = new(rewrite.CreateLocationRequest)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
-		return nil, err
-	}
-	return r.status200, nil
 }
-
-// GETGeofeature — Get location with geojson Feature
-// GET /geo-feature
-func (c *Client) GETGeofeature(ctx context.Context, input *rewrite.CreateLocationRequest) (*GETGeofeatureResponse, error) {
-
-	u := c.BaseURL + "/geo-feature"
-
-
-
-	var body io.Reader
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", u, body)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
-	}
-	return &GETGeofeatureResponse{
-		Response: resp,
-		client:   c,
-	}, nil
-}
-
-
-
-// Get location with orb Point
-// GET /geo-point
-
-
-// GETGeopointResponse holds the response for GETGeopoint.
-type GETGeopointResponse struct {
-	*http.Response
-	client *Client
-	status200 *rewrite.CreateLocationWithPoint
-}
-
-func (r *GETGeopointResponse) StatusOk() (*rewrite.CreateLocationWithPoint, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
-	}
-	if r.status200 != nil {
-		return r.status200, nil
-	}
-	r.status200 = new(rewrite.CreateLocationWithPoint)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
-		return nil, err
-	}
-	return r.status200, nil
-}
-
-// GETGeopoint — Get location with orb Point
-// GET /geo-point
-func (c *Client) GETGeopoint(ctx context.Context, input *rewrite.CreateLocationWithPoint) (*GETGeopointResponse, error) {
-
-	u := c.BaseURL + "/geo-point"
-
-
-
-	var body io.Reader
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", u, body)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
-	}
-	return &GETGeopointResponse{
-		Response: resp,
-		client:   c,
-	}, nil
-}
-
-
-
-// Get struct with rewritten references
-// GET /rewrite-ref
-
-
-// GETRewriterefResponse holds the response for GETRewriteref.
-type GETRewriterefResponse struct {
-	*http.Response
-	client *Client
-	status200 *rewrite.WithRewriteRef
-}
-
-func (r *GETRewriterefResponse) StatusOk() (*rewrite.WithRewriteRef, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
-	}
-	if r.status200 != nil {
-		return r.status200, nil
-	}
-	r.status200 = new(rewrite.WithRewriteRef)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
-		return nil, err
-	}
-	return r.status200, nil
-}
-
-// GETRewriteref — Get struct with rewritten references
-// GET /rewrite-ref
-func (c *Client) GETRewriteref(ctx context.Context, input *rewrite.WithRewriteRef) (*GETRewriterefResponse, error) {
-
-	u := c.BaseURL + "/rewrite-ref"
-
-
-
-	var body io.Reader
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", u, body)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
-	}
-	return &GETRewriterefResponse{
-		Response: resp,
-		client:   c,
-	}, nil
-}
-
-
-
-// Get struct with rewritten types
-// GET /rewrite-type
-
-
-// GETRewritetypeResponse holds the response for GETRewritetype.
-type GETRewritetypeResponse struct {
-	*http.Response
-	client *Client
-	status200 *rewrite.WithRewriteType
-}
-
-func (r *GETRewritetypeResponse) StatusOk() (*rewrite.WithRewriteType, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
-	}
-	if r.status200 != nil {
-		return r.status200, nil
-	}
-	r.status200 = new(rewrite.WithRewriteType)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
-		return nil, err
-	}
-	return r.status200, nil
-}
-
-// GETRewritetype — Get struct with rewritten types
-// GET /rewrite-type
-func (c *Client) GETRewritetype(ctx context.Context, input *rewrite.WithRewriteType) (*GETRewritetypeResponse, error) {
-
-	u := c.BaseURL + "/rewrite-type"
-
-
-
-	var body io.Reader
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", u, body)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
-	}
-	return &GETRewritetypeResponse{
-		Response: resp,
-		client:   c,
-	}, nil
-}
-
-
-

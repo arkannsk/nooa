@@ -5,14 +5,14 @@ package httpparametersdemo
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"net/http"
 	"strings"
+	"fmt"
+	"io"
 	"net/url"
 	"bytes"
 	"encoding/json"
-	"github.com/arkannsk/nooa/client"
+	nooaclient "github.com/arkannsk/nooa/client"
 	httpparams "github.com/arkannsk/nooa/examples/models/08_http_params"
 )
 
@@ -31,319 +31,309 @@ func (s *stdHTTPClient) Do(ctx context.Context, req *http.Request) (*http.Respon
 	return s.Client.Do(req.WithContext(ctx))
 }
 
-// Client is the generated HTTP client for 08 HTTP Parameters Demo.
-type Client struct {
+// httpc is the internal HTTP client shared by all tag adapters.
+type httpc struct {
 	BaseURL    string
 	HTTPClient HTTPClient
-
-	// Codec maps Content-Type to client.Codec for response body decoding.
-	// If nil, defaults to JSON decoding for all types.
-	Codec map[string]client.Codec
+	Codec      map[string]nooaclient.Codec
 }
 
-// New creates a new Client.
-// If hc is nil, a default *http.Client is used.
-// If hc is *http.Client, it is automatically wrapped.
-func New(baseURL string, hc any) *Client {
-	var client HTTPClient
+func newHTTPC(baseURL string, hc any) *httpc {
+	var httpClient HTTPClient
 	switch v := hc.(type) {
 	case nil:
-		client = &stdHTTPClient{Client: &http.Client{}}
+		httpClient = &stdHTTPClient{Client: &http.Client{}}
 	case *http.Client:
-		client = &stdHTTPClient{Client: v}
+		httpClient = &stdHTTPClient{Client: v}
 	case HTTPClient:
-		client = v
+		httpClient = v
 	default:
-		client = &stdHTTPClient{Client: &http.Client{}}
+		httpClient = &stdHTTPClient{Client: &http.Client{}}
 	}
-	return &Client{
+	return &httpc{
 		BaseURL:    strings.TrimRight(baseURL, "/"),
-		HTTPClient: client,
+		HTTPClient: httpClient,
 	}
 }
+// V1 is the HTTP client for 08 HTTP Parameters Demo.
+type V1 struct {
+	base *httpc
+}
 
+// New creates a new V1 client.
+// If hc is nil, a default *http.Client is used.
+// If hc is *http.Client, it is automatically wrapped.
+func New(baseURL string, hc any) *V1 {
+	return &V1{base: newHTTPC(baseURL, hc)}
+}
 
 // Request with header parameters
 // POST /header-demo
-
-
-// POSTHeaderdemoResponse holds the response for POSTHeaderdemo.
-type POSTHeaderdemoResponse struct {
-	*http.Response
-	client *Client
-	status200 *httpparams.HeaderParams
-}
-
-func (r *POSTHeaderdemoResponse) StatusOk() (*httpparams.HeaderParams, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
-	}
-	if r.status200 != nil {
-		return r.status200, nil
-	}
-	r.status200 = new(httpparams.HeaderParams)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
-		return nil, err
-	}
-	return r.status200, nil
-}
-
-// POSTHeaderdemo — Request with header parameters
-// POST /header-demo
-func (c *Client) POSTHeaderdemo(ctx context.Context, input *httpparams.HeaderParams) (*POSTHeaderdemoResponse, error) {
-
-	u := c.BaseURL + "/header-demo"
-
-
-
+func (c *V1) POSTHeaderdemo(ctx context.Context, input *httpparams.HeaderParams) (*POSTHeaderdemoResponse, error) {
 	var body io.Reader
-	b, err := json.Marshal(input)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request body: %w", err)
+	if input != nil {
+		b, err := json.Marshal(input)
+		if err != nil {
+			return nil, fmt.Errorf("marshal request body: %w", err)
+		}
+		body = bytes.NewReader(b)
 	}
-	body = bytes.NewReader(b)
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", u, body)
+	path := "/header-demo"
+
+	requestURL := c.base.BaseURL + path
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", requestURL, body)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
-
 	httpReq.Header.Set("X-API-Key", fmt.Sprintf("%v", input.APIKey))
-
 	httpReq.Header.Set("request-id", fmt.Sprintf("%v", input.RequestID))
 
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
+	httpResp, err := c.base.HTTPClient.Do(ctx, httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
+		return nil, fmt.Errorf("execute request: %w", err)
 	}
+	defer httpResp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	rawBody, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response body: %w", err)
 	}
 	return &POSTHeaderdemoResponse{
-		Response: resp,
-		client:   c,
+		StatusCode: httpResp.StatusCode,
+		RawBody:    rawBody,
+		httpc:      c.base,
 	}, nil
 }
-
-
 
 // Mixed parameter locations
 // GET /items/{id}
+func (c *V1) GETItemsId(ctx context.Context, input *httpparams.MixedParams) (*GETItemsIdResponse, error) {
 
+	path := "/items/{id}"
+	path = strings.ReplaceAll(path, "{id}", fmt.Sprintf("%v", input.ID))
 
-// GETItemsIdResponse holds the response for GETItemsId.
-type GETItemsIdResponse struct {
-	*http.Response
-	client *Client
-	status200 *httpparams.MixedParams
-}
-
-func (r *GETItemsIdResponse) StatusOk() (*httpparams.MixedParams, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	requestURL := c.base.BaseURL + path
+	queryValues := url.Values{}
+	if input.Filter != "" {
+		queryValues.Add("filter", input.Filter)
 	}
-	if r.status200 != nil {
-		return r.status200, nil
-	}
-	r.status200 = new(httpparams.MixedParams)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
-		return nil, err
-	}
-	return r.status200, nil
-}
-
-// GETItemsId — Mixed parameter locations
-// GET /items/{id}
-func (c *Client) GETItemsId(ctx context.Context, input *httpparams.MixedParams) (*GETItemsIdResponse, error) {
-
-	if input == nil {
-		return nil, fmt.Errorf("input is required")
+	if len(queryValues) > 0 {
+		requestURL += "?" + queryValues.Encode()
 	}
 
-	u := c.BaseURL + "/items/{id}"
-
-
-
-	
-	u = strings.ReplaceAll(u, "{id}", fmt.Sprintf("%v", input.ID))
-	
-
-	// Query parameters
-	query := url.Values{}
-	query.Set("filter", fmt.Sprintf("%v", input.Filter))
-	if len(query) > 0 {
-		u += "?" + query.Encode()
-	}
-
-	var body io.Reader
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", u, body)
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", requestURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
-
 	httpReq.Header.Set("X-Auth-Token", fmt.Sprintf("%v", input.AuthToken))
 
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
+	httpResp, err := c.base.HTTPClient.Do(ctx, httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
+		return nil, fmt.Errorf("execute request: %w", err)
 	}
+	defer httpResp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	rawBody, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response body: %w", err)
 	}
 	return &GETItemsIdResponse{
-		Response: resp,
-		client:   c,
+		StatusCode: httpResp.StatusCode,
+		RawBody:    rawBody,
+		httpc:      c.base,
 	}, nil
 }
-
-
 
 // Search with query parameters
 // GET /search
+func (c *V1) GETSearch(ctx context.Context, input *httpparams.QueryParams) (*GETSearchResponse, error) {
 
+	path := "/search"
 
-// GETSearchResponse holds the response for GETSearch.
-type GETSearchResponse struct {
-	*http.Response
-	client *Client
-	status200 *httpparams.QueryParams
-}
-
-func (r *GETSearchResponse) StatusOk() (*httpparams.QueryParams, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	requestURL := c.base.BaseURL + path
+	queryValues := url.Values{}
+	if input.Query != "" {
+		queryValues.Add("query", input.Query)
 	}
-	if r.status200 != nil {
-		return r.status200, nil
+	if input.Page != 0 {
+		queryValues.Add("page", fmt.Sprintf("%v", input.Page))
 	}
-	r.status200 = new(httpparams.QueryParams)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
-		return nil, err
+	if input.Limit != 0 {
+		queryValues.Add("limit", fmt.Sprintf("%v", input.Limit))
 	}
-	return r.status200, nil
-}
-
-// GETSearch — Search with query parameters
-// GET /search
-func (c *Client) GETSearch(ctx context.Context, input *httpparams.QueryParams) (*GETSearchResponse, error) {
-
-	u := c.BaseURL + "/search"
-
-
-	// Query parameters
-	query := url.Values{}
-	query.Set("query", fmt.Sprintf("%v", input.Query))
-	query.Set("page", fmt.Sprintf("%v", input.Page))
-	query.Set("limit", fmt.Sprintf("%v", input.Limit))
-	query.Set("status", fmt.Sprintf("%v", input.Status))
-	if len(query) > 0 {
-		u += "?" + query.Encode()
+	if input.Status != "" {
+		queryValues.Add("status", input.Status)
+	}
+	if len(queryValues) > 0 {
+		requestURL += "?" + queryValues.Encode()
 	}
 
-	var body io.Reader
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", u, body)
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", requestURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
+	httpResp, err := c.base.HTTPClient.Do(ctx, httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
+		return nil, fmt.Errorf("execute request: %w", err)
 	}
+	defer httpResp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	rawBody, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response body: %w", err)
 	}
 	return &GETSearchResponse{
-		Response: resp,
-		client:   c,
+		StatusCode: httpResp.StatusCode,
+		RawBody:    rawBody,
+		httpc:      c.base,
 	}, nil
 }
 
-
-
 // Update resource by path parameters
 // PUT /users/{userId}/resources/{resource_id}
-
-
-// PUTUsersUserIdResourcesResourceidResponse holds the response for PUTUsersUserIdResourcesResourceid.
-type PUTUsersUserIdResourcesResourceidResponse struct {
-	*http.Response
-	client *Client
-	status200 *httpparams.PathParams
-}
-
-func (r *PUTUsersUserIdResourcesResourceidResponse) StatusOk() (*httpparams.PathParams, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
-	}
-	if r.status200 != nil {
-		return r.status200, nil
-	}
-	r.status200 = new(httpparams.PathParams)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
-		return nil, err
-	}
-	return r.status200, nil
-}
-
-// PUTUsersUserIdResourcesResourceid — Update resource by path parameters
-// PUT /users/{userId}/resources/{resource_id}
-func (c *Client) PUTUsersUserIdResourcesResourceid(ctx context.Context, input *httpparams.PathParams) (*PUTUsersUserIdResourcesResourceidResponse, error) {
-
-	if input == nil {
-		return nil, fmt.Errorf("input is required")
-	}
-
-	u := c.BaseURL + "/users/{userId}/resources/{resource_id}"
-
-
-
-	
-	u = strings.ReplaceAll(u, "{userId}", fmt.Sprintf("%v", input.UserID))
-	
-
-
-	
-	u = strings.ReplaceAll(u, "{resource_id}", fmt.Sprintf("%v", input.ResourceID))
-	
-
-
+func (c *V1) PUTUsersUserIdResourcesResourceid(ctx context.Context, input *httpparams.PathParams) (*PUTUsersUserIdResourcesResourceidResponse, error) {
 	var body io.Reader
-	b, err := json.Marshal(input)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request body: %w", err)
+	if input != nil {
+		b, err := json.Marshal(input)
+		if err != nil {
+			return nil, fmt.Errorf("marshal request body: %w", err)
+		}
+		body = bytes.NewReader(b)
 	}
-	body = bytes.NewReader(b)
 
-	httpReq, err := http.NewRequestWithContext(ctx, "PUT", u, body)
+	path := "/users/{userId}/resources/{resource_id}"
+	path = strings.ReplaceAll(path, "{userId}", fmt.Sprintf("%v", input.UserID))
+	path = strings.ReplaceAll(path, "{resource_id}", fmt.Sprintf("%v", input.ResourceID))
+
+	requestURL := c.base.BaseURL + path
+
+	httpReq, err := http.NewRequestWithContext(ctx, "PUT", requestURL, body)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
+	httpResp, err := c.base.HTTPClient.Do(ctx, httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
+		return nil, fmt.Errorf("execute request: %w", err)
 	}
+	defer httpResp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	rawBody, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response body: %w", err)
 	}
 	return &PUTUsersUserIdResourcesResourceidResponse{
-		Response: resp,
-		client:   c,
+		StatusCode: httpResp.StatusCode,
+		RawBody:    rawBody,
+		httpc:      c.base,
 	}, nil
 }
 
+// POSTHeaderdemoResponse is the response for the POSTHeaderdemo operation.
+type POSTHeaderdemoResponse struct {
+	StatusCode int
+	RawBody    []byte
+	httpc      *httpc
+	status200 *httpparams.HeaderParams
+}
 
+// StatusOk returns the unmarshaled response body for status 200.
+func (r *POSTHeaderdemoResponse) StatusOk() (*httpparams.HeaderParams, error) {
+	if r.status200 != nil {
+		return r.status200, nil
+	}
+	if r.StatusCode != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	}
+	if r.RawBody == nil || len(r.RawBody) == 0 {
+		return nil, fmt.Errorf("empty response body")
+	}
+	r.status200 = new(httpparams.HeaderParams)
+	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
+		return nil, err
+	}
+	return r.status200, nil
+}
 
+// GETItemsIdResponse is the response for the GETItemsId operation.
+type GETItemsIdResponse struct {
+	StatusCode int
+	RawBody    []byte
+	httpc      *httpc
+	status200 *httpparams.MixedParams
+}
+
+// StatusOk returns the unmarshaled response body for status 200.
+func (r *GETItemsIdResponse) StatusOk() (*httpparams.MixedParams, error) {
+	if r.status200 != nil {
+		return r.status200, nil
+	}
+	if r.StatusCode != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	}
+	if r.RawBody == nil || len(r.RawBody) == 0 {
+		return nil, fmt.Errorf("empty response body")
+	}
+	r.status200 = new(httpparams.MixedParams)
+	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
+		return nil, err
+	}
+	return r.status200, nil
+}
+
+// GETSearchResponse is the response for the GETSearch operation.
+type GETSearchResponse struct {
+	StatusCode int
+	RawBody    []byte
+	httpc      *httpc
+	status200 *httpparams.QueryParams
+}
+
+// StatusOk returns the unmarshaled response body for status 200.
+func (r *GETSearchResponse) StatusOk() (*httpparams.QueryParams, error) {
+	if r.status200 != nil {
+		return r.status200, nil
+	}
+	if r.StatusCode != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	}
+	if r.RawBody == nil || len(r.RawBody) == 0 {
+		return nil, fmt.Errorf("empty response body")
+	}
+	r.status200 = new(httpparams.QueryParams)
+	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
+		return nil, err
+	}
+	return r.status200, nil
+}
+
+// PUTUsersUserIdResourcesResourceidResponse is the response for the PUTUsersUserIdResourcesResourceid operation.
+type PUTUsersUserIdResourcesResourceidResponse struct {
+	StatusCode int
+	RawBody    []byte
+	httpc      *httpc
+	status200 *httpparams.PathParams
+}
+
+// StatusOk returns the unmarshaled response body for status 200.
+func (r *PUTUsersUserIdResourcesResourceidResponse) StatusOk() (*httpparams.PathParams, error) {
+	if r.status200 != nil {
+		return r.status200, nil
+	}
+	if r.StatusCode != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	}
+	if r.RawBody == nil || len(r.RawBody) == 0 {
+		return nil, fmt.Errorf("empty response body")
+	}
+	r.status200 = new(httpparams.PathParams)
+	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
+		return nil, err
+	}
+	return r.status200, nil
+}

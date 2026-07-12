@@ -5,12 +5,9 @@ package polymorphismdemo
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"net/http"
 	"strings"
-	"github.com/arkannsk/nooa/client"
-	polymorphism "github.com/arkannsk/nooa/examples/models/06_polymorphism"
+	nooaclient "github.com/arkannsk/nooa/client"
 )
 
 // HTTPClient is the interface for executing HTTP requests.
@@ -28,263 +25,46 @@ func (s *stdHTTPClient) Do(ctx context.Context, req *http.Request) (*http.Respon
 	return s.Client.Do(req.WithContext(ctx))
 }
 
-// Client is the generated HTTP client for 06 Polymorphism Demo.
-type Client struct {
+// httpc is the internal HTTP client shared by all tag adapters.
+type httpc struct {
 	BaseURL    string
 	HTTPClient HTTPClient
-
-	// Codec maps Content-Type to client.Codec for response body decoding.
-	// If nil, defaults to JSON decoding for all types.
-	Codec map[string]client.Codec
+	Codec      map[string]nooaclient.Codec
 }
 
-// New creates a new Client.
-// If hc is nil, a default *http.Client is used.
-// If hc is *http.Client, it is automatically wrapped.
-func New(baseURL string, hc any) *Client {
-	var client HTTPClient
+func newHTTPC(baseURL string, hc any) *httpc {
+	var httpClient HTTPClient
 	switch v := hc.(type) {
 	case nil:
-		client = &stdHTTPClient{Client: &http.Client{}}
+		httpClient = &stdHTTPClient{Client: &http.Client{}}
 	case *http.Client:
-		client = &stdHTTPClient{Client: v}
+		httpClient = &stdHTTPClient{Client: v}
 	case HTTPClient:
-		client = v
+		httpClient = v
 	default:
-		client = &stdHTTPClient{Client: &http.Client{}}
+		httpClient = &stdHTTPClient{Client: &http.Client{}}
 	}
-	return &Client{
+	return &httpc{
 		BaseURL:    strings.TrimRight(baseURL, "/"),
-		HTTPClient: client,
+		HTTPClient: httpClient,
 	}
 }
-
-
-// Get circle shape
-// GET /circle
-
-
-// GETCircleResponse holds the response for GETCircle.
-type GETCircleResponse struct {
-	*http.Response
-	client *Client
-	status200 *polymorphism.CircleShape
+// V1 is the top-level client for 06 Polymorphism Demo.
+// It provides tag-scoped sub-clients for each API group.
+type V1 struct {
+	// Polymorphism provides access to the "Polymorphism" operations.
+	Polymorphism PolymorphismClient
+	// Shapes provides access to the "Shapes" operations.
+	Shapes ShapesClient
 }
 
-func (r *GETCircleResponse) StatusOk() (*polymorphism.CircleShape, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+// New creates a new V1 client.
+// If hc is nil, a default *http.Client is used.
+// If hc is *http.Client, it is automatically wrapped.
+func New(baseURL string, hc any) *V1 {
+	c := newHTTPC(baseURL, hc)
+	return &V1{
+		Polymorphism: &polymorphismAdapter{httpc: c},
+		Shapes: &shapesAdapter{httpc: c},
 	}
-	if r.status200 != nil {
-		return r.status200, nil
-	}
-	r.status200 = new(polymorphism.CircleShape)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
-		return nil, err
-	}
-	return r.status200, nil
 }
-
-// GETCircle — Get circle shape
-// GET /circle
-func (c *Client) GETCircle(ctx context.Context, input *polymorphism.CircleShape) (*GETCircleResponse, error) {
-
-	u := c.BaseURL + "/circle"
-
-
-
-	var body io.Reader
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", u, body)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
-	}
-	return &GETCircleResponse{
-		Response: resp,
-		client:   c,
-	}, nil
-}
-
-
-
-// Get container with shape
-// GET /container
-
-
-// GETContainerResponse holds the response for GETContainer.
-type GETContainerResponse struct {
-	*http.Response
-	client *Client
-	status200 *polymorphism.Container
-}
-
-func (r *GETContainerResponse) StatusOk() (*polymorphism.Container, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
-	}
-	if r.status200 != nil {
-		return r.status200, nil
-	}
-	r.status200 = new(polymorphism.Container)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
-		return nil, err
-	}
-	return r.status200, nil
-}
-
-// GETContainer — Get container with shape
-// GET /container
-func (c *Client) GETContainer(ctx context.Context, input *polymorphism.Container) (*GETContainerResponse, error) {
-
-	u := c.BaseURL + "/container"
-
-
-
-	var body io.Reader
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", u, body)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
-	}
-	return &GETContainerResponse{
-		Response: resp,
-		client:   c,
-	}, nil
-}
-
-
-
-// Get oneOf example
-// GET /oneof
-
-
-// GETOneofResponse holds the response for GETOneof.
-type GETOneofResponse struct {
-	*http.Response
-	client *Client
-	status200 *polymorphism.OneOfExample
-}
-
-func (r *GETOneofResponse) StatusOk() (*polymorphism.OneOfExample, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
-	}
-	if r.status200 != nil {
-		return r.status200, nil
-	}
-	r.status200 = new(polymorphism.OneOfExample)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
-		return nil, err
-	}
-	return r.status200, nil
-}
-
-// GETOneof — Get oneOf example
-// GET /oneof
-func (c *Client) GETOneof(ctx context.Context, input *polymorphism.OneOfExample) (*GETOneofResponse, error) {
-
-	u := c.BaseURL + "/oneof"
-
-
-
-	var body io.Reader
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", u, body)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
-	}
-	return &GETOneofResponse{
-		Response: resp,
-		client:   c,
-	}, nil
-}
-
-
-
-// Get rectangle shape
-// GET /rectangle
-
-
-// GETRectangleResponse holds the response for GETRectangle.
-type GETRectangleResponse struct {
-	*http.Response
-	client *Client
-	status200 *polymorphism.RectangleShape
-}
-
-func (r *GETRectangleResponse) StatusOk() (*polymorphism.RectangleShape, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
-	}
-	if r.status200 != nil {
-		return r.status200, nil
-	}
-	r.status200 = new(polymorphism.RectangleShape)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
-		return nil, err
-	}
-	return r.status200, nil
-}
-
-// GETRectangle — Get rectangle shape
-// GET /rectangle
-func (c *Client) GETRectangle(ctx context.Context, input *polymorphism.RectangleShape) (*GETRectangleResponse, error) {
-
-	u := c.BaseURL + "/rectangle"
-
-
-
-	var body io.Reader
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", u, body)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
-	}
-	return &GETRectangleResponse{
-		Response: resp,
-		client:   c,
-	}, nil
-}
-
-
-

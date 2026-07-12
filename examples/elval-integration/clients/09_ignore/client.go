@@ -5,11 +5,11 @@ package ignoredemo
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"net/http"
 	"strings"
-	"github.com/arkannsk/nooa/client"
+	"fmt"
+	"io"
+	nooaclient "github.com/arkannsk/nooa/client"
 	ignore "github.com/arkannsk/nooa/examples/models/09_ignore"
 )
 
@@ -28,206 +28,206 @@ func (s *stdHTTPClient) Do(ctx context.Context, req *http.Request) (*http.Respon
 	return s.Client.Do(req.WithContext(ctx))
 }
 
-// Client is the generated HTTP client for 09 Ignore Demo.
-type Client struct {
+// httpc is the internal HTTP client shared by all tag adapters.
+type httpc struct {
 	BaseURL    string
 	HTTPClient HTTPClient
-
-	// Codec maps Content-Type to client.Codec for response body decoding.
-	// If nil, defaults to JSON decoding for all types.
-	Codec map[string]client.Codec
+	Codec      map[string]nooaclient.Codec
 }
 
-// New creates a new Client.
-// If hc is nil, a default *http.Client is used.
-// If hc is *http.Client, it is automatically wrapped.
-func New(baseURL string, hc any) *Client {
-	var client HTTPClient
+func newHTTPC(baseURL string, hc any) *httpc {
+	var httpClient HTTPClient
 	switch v := hc.(type) {
 	case nil:
-		client = &stdHTTPClient{Client: &http.Client{}}
+		httpClient = &stdHTTPClient{Client: &http.Client{}}
 	case *http.Client:
-		client = &stdHTTPClient{Client: v}
+		httpClient = &stdHTTPClient{Client: v}
 	case HTTPClient:
-		client = v
+		httpClient = v
 	default:
-		client = &stdHTTPClient{Client: &http.Client{}}
+		httpClient = &stdHTTPClient{Client: &http.Client{}}
 	}
-	return &Client{
+	return &httpc{
 		BaseURL:    strings.TrimRight(baseURL, "/"),
-		HTTPClient: client,
+		HTTPClient: httpClient,
 	}
 }
+// V1 is the HTTP client for 09 Ignore Demo.
+type V1 struct {
+	base *httpc
+}
 
+// New creates a new V1 client.
+// If hc is nil, a default *http.Client is used.
+// If hc is *http.Client, it is automatically wrapped.
+func New(baseURL string, hc any) *V1 {
+	return &V1{base: newHTTPC(baseURL, hc)}
+}
 
 // Struct with an ignored field
 // GET /ignored-field
+func (c *V1) GETIgnoredfield(ctx context.Context, input *ignore.WithIgnoredField) (*GETIgnoredfieldResponse, error) {
 
+	path := "/ignored-field"
 
-// GETIgnoredfieldResponse holds the response for GETIgnoredfield.
-type GETIgnoredfieldResponse struct {
-	*http.Response
-	client *Client
-	status200 *ignore.WithIgnoredField
-}
+	requestURL := c.base.BaseURL + path
 
-func (r *GETIgnoredfieldResponse) StatusOk() (*ignore.WithIgnoredField, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
-	}
-	if r.status200 != nil {
-		return r.status200, nil
-	}
-	r.status200 = new(ignore.WithIgnoredField)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
-		return nil, err
-	}
-	return r.status200, nil
-}
-
-// GETIgnoredfield — Struct with an ignored field
-// GET /ignored-field
-func (c *Client) GETIgnoredfield(ctx context.Context, input *ignore.WithIgnoredField) (*GETIgnoredfieldResponse, error) {
-
-	u := c.BaseURL + "/ignored-field"
-
-
-
-	var body io.Reader
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", u, body)
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", requestURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
+	httpResp, err := c.base.HTTPClient.Do(ctx, httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
+		return nil, fmt.Errorf("execute request: %w", err)
 	}
+	defer httpResp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	rawBody, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response body: %w", err)
 	}
 	return &GETIgnoredfieldResponse{
-		Response: resp,
-		client:   c,
+		StatusCode: httpResp.StatusCode,
+		RawBody:    rawBody,
+		httpc:      c.base,
 	}, nil
 }
-
-
 
 // Struct with all fields ignored
 // GET /only-ignored
+func (c *V1) GETOnlyignored(ctx context.Context, input *ignore.OnlyIgnoredFields) (*GETOnlyignoredResponse, error) {
 
+	path := "/only-ignored"
 
-// GETOnlyignoredResponse holds the response for GETOnlyignored.
-type GETOnlyignoredResponse struct {
-	*http.Response
-	client *Client
-	status200 *ignore.OnlyIgnoredFields
-}
+	requestURL := c.base.BaseURL + path
 
-func (r *GETOnlyignoredResponse) StatusOk() (*ignore.OnlyIgnoredFields, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
-	}
-	if r.status200 != nil {
-		return r.status200, nil
-	}
-	r.status200 = new(ignore.OnlyIgnoredFields)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
-		return nil, err
-	}
-	return r.status200, nil
-}
-
-// GETOnlyignored — Struct with all fields ignored
-// GET /only-ignored
-func (c *Client) GETOnlyignored(ctx context.Context, input *ignore.OnlyIgnoredFields) (*GETOnlyignoredResponse, error) {
-
-	u := c.BaseURL + "/only-ignored"
-
-
-
-	var body io.Reader
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", u, body)
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", requestURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
+	httpResp, err := c.base.HTTPClient.Do(ctx, httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
+		return nil, fmt.Errorf("execute request: %w", err)
 	}
+	defer httpResp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	rawBody, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response body: %w", err)
 	}
 	return &GETOnlyignoredResponse{
-		Response: resp,
-		client:   c,
+		StatusCode: httpResp.StatusCode,
+		RawBody:    rawBody,
+		httpc:      c.base,
 	}, nil
 }
-
-
 
 // Field overrides ignored type
 // GET /override
+func (c *V1) GETOverride(ctx context.Context, input *ignore.WithOverride) (*GETOverrideResponse, error) {
 
+	path := "/override"
 
-// GETOverrideResponse holds the response for GETOverride.
-type GETOverrideResponse struct {
-	*http.Response
-	client *Client
-	status200 *ignore.WithOverride
+	requestURL := c.base.BaseURL + path
+
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", requestURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	httpResp, err := c.base.HTTPClient.Do(ctx, httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("execute request: %w", err)
+	}
+	defer httpResp.Body.Close()
+
+	rawBody, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response body: %w", err)
+	}
+	return &GETOverrideResponse{
+		StatusCode: httpResp.StatusCode,
+		RawBody:    rawBody,
+		httpc:      c.base,
+	}, nil
 }
 
-func (r *GETOverrideResponse) StatusOk() (*ignore.WithOverride, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
-	}
+// GETIgnoredfieldResponse is the response for the GETIgnoredfield operation.
+type GETIgnoredfieldResponse struct {
+	StatusCode int
+	RawBody    []byte
+	httpc      *httpc
+	status200 *ignore.WithIgnoredField
+}
+
+// StatusOk returns the unmarshaled response body for status 200.
+func (r *GETIgnoredfieldResponse) StatusOk() (*ignore.WithIgnoredField, error) {
 	if r.status200 != nil {
 		return r.status200, nil
 	}
-	r.status200 = new(ignore.WithOverride)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
+	if r.StatusCode != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	}
+	if r.RawBody == nil || len(r.RawBody) == 0 {
+		return nil, fmt.Errorf("empty response body")
+	}
+	r.status200 = new(ignore.WithIgnoredField)
+	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
 		return nil, err
 	}
 	return r.status200, nil
 }
 
-// GETOverride — Field overrides ignored type
-// GET /override
-func (c *Client) GETOverride(ctx context.Context, input *ignore.WithOverride) (*GETOverrideResponse, error) {
-
-	u := c.BaseURL + "/override"
-
-
-
-	var body io.Reader
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", u, body)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
-	}
-	return &GETOverrideResponse{
-		Response: resp,
-		client:   c,
-	}, nil
+// GETOnlyignoredResponse is the response for the GETOnlyignored operation.
+type GETOnlyignoredResponse struct {
+	StatusCode int
+	RawBody    []byte
+	httpc      *httpc
+	status200 *ignore.OnlyIgnoredFields
 }
 
+// StatusOk returns the unmarshaled response body for status 200.
+func (r *GETOnlyignoredResponse) StatusOk() (*ignore.OnlyIgnoredFields, error) {
+	if r.status200 != nil {
+		return r.status200, nil
+	}
+	if r.StatusCode != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	}
+	if r.RawBody == nil || len(r.RawBody) == 0 {
+		return nil, fmt.Errorf("empty response body")
+	}
+	r.status200 = new(ignore.OnlyIgnoredFields)
+	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
+		return nil, err
+	}
+	return r.status200, nil
+}
 
+// GETOverrideResponse is the response for the GETOverride operation.
+type GETOverrideResponse struct {
+	StatusCode int
+	RawBody    []byte
+	httpc      *httpc
+	status200 *ignore.WithOverride
+}
 
+// StatusOk returns the unmarshaled response body for status 200.
+func (r *GETOverrideResponse) StatusOk() (*ignore.WithOverride, error) {
+	if r.status200 != nil {
+		return r.status200, nil
+	}
+	if r.StatusCode != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	}
+	if r.RawBody == nil || len(r.RawBody) == 0 {
+		return nil, fmt.Errorf("empty response body")
+	}
+	r.status200 = new(ignore.WithOverride)
+	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
+		return nil, err
+	}
+	return r.status200, nil
+}

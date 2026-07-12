@@ -5,11 +5,11 @@ package edgecasesdemo
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"net/http"
 	"strings"
-	"github.com/arkannsk/nooa/client"
+	"fmt"
+	"io"
+	nooaclient "github.com/arkannsk/nooa/client"
 	edgecases "github.com/arkannsk/nooa/examples/models/11_edge_cases"
 )
 
@@ -28,320 +28,318 @@ func (s *stdHTTPClient) Do(ctx context.Context, req *http.Request) (*http.Respon
 	return s.Client.Do(req.WithContext(ctx))
 }
 
-// Client is the generated HTTP client for 11 Edge Cases Demo.
-type Client struct {
+// httpc is the internal HTTP client shared by all tag adapters.
+type httpc struct {
 	BaseURL    string
 	HTTPClient HTTPClient
-
-	// Codec maps Content-Type to client.Codec for response body decoding.
-	// If nil, defaults to JSON decoding for all types.
-	Codec map[string]client.Codec
+	Codec      map[string]nooaclient.Codec
 }
 
-// New creates a new Client.
-// If hc is nil, a default *http.Client is used.
-// If hc is *http.Client, it is automatically wrapped.
-func New(baseURL string, hc any) *Client {
-	var client HTTPClient
+func newHTTPC(baseURL string, hc any) *httpc {
+	var httpClient HTTPClient
 	switch v := hc.(type) {
 	case nil:
-		client = &stdHTTPClient{Client: &http.Client{}}
+		httpClient = &stdHTTPClient{Client: &http.Client{}}
 	case *http.Client:
-		client = &stdHTTPClient{Client: v}
+		httpClient = &stdHTTPClient{Client: v}
 	case HTTPClient:
-		client = v
+		httpClient = v
 	default:
-		client = &stdHTTPClient{Client: &http.Client{}}
+		httpClient = &stdHTTPClient{Client: &http.Client{}}
 	}
-	return &Client{
+	return &httpc{
 		BaseURL:    strings.TrimRight(baseURL, "/"),
-		HTTPClient: client,
+		HTTPClient: httpClient,
 	}
 }
+// V1 is the HTTP client for 11 Edge Cases Demo.
+type V1 struct {
+	base *httpc
+}
 
+// New creates a new V1 client.
+// If hc is nil, a default *http.Client is used.
+// If hc is *http.Client, it is automatically wrapped.
+func New(baseURL string, hc any) *V1 {
+	return &V1{base: newHTTPC(baseURL, hc)}
+}
 
 // Circular reference
 // GET /circular
+func (c *V1) GETCircular(ctx context.Context, input *edgecases.CircularRefA) (*GETCircularResponse, error) {
 
+	path := "/circular"
 
-// GETCircularResponse holds the response for GETCircular.
-type GETCircularResponse struct {
-	*http.Response
-	client *Client
-	status200 *edgecases.CircularRefA
-}
+	requestURL := c.base.BaseURL + path
 
-func (r *GETCircularResponse) StatusOk() (*edgecases.CircularRefA, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
-	}
-	if r.status200 != nil {
-		return r.status200, nil
-	}
-	r.status200 = new(edgecases.CircularRefA)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
-		return nil, err
-	}
-	return r.status200, nil
-}
-
-// GETCircular — Circular reference
-// GET /circular
-func (c *Client) GETCircular(ctx context.Context, input *edgecases.CircularRefA) (*GETCircularResponse, error) {
-
-	u := c.BaseURL + "/circular"
-
-
-
-	var body io.Reader
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", u, body)
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", requestURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
+	httpResp, err := c.base.HTTPClient.Do(ctx, httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
+		return nil, fmt.Errorf("execute request: %w", err)
 	}
+	defer httpResp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	rawBody, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response body: %w", err)
 	}
 	return &GETCircularResponse{
-		Response: resp,
-		client:   c,
+		StatusCode: httpResp.StatusCode,
+		RawBody:    rawBody,
+		httpc:      c.base,
 	}, nil
 }
-
-
 
 // Empty struct
 // GET /empty
+func (c *V1) GETEmpty(ctx context.Context, input *edgecases.EmptyStruct) (*GETEmptyResponse, error) {
 
+	path := "/empty"
 
-// GETEmptyResponse holds the response for GETEmpty.
-type GETEmptyResponse struct {
-	*http.Response
-	client *Client
-	status200 *edgecases.EmptyStruct
-}
+	requestURL := c.base.BaseURL + path
 
-func (r *GETEmptyResponse) StatusOk() (*edgecases.EmptyStruct, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
-	}
-	if r.status200 != nil {
-		return r.status200, nil
-	}
-	r.status200 = new(edgecases.EmptyStruct)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
-		return nil, err
-	}
-	return r.status200, nil
-}
-
-// GETEmpty — Empty struct
-// GET /empty
-func (c *Client) GETEmpty(ctx context.Context, input *edgecases.EmptyStruct) (*GETEmptyResponse, error) {
-
-	u := c.BaseURL + "/empty"
-
-
-
-	var body io.Reader
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", u, body)
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", requestURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
+	httpResp, err := c.base.HTTPClient.Do(ctx, httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
+		return nil, fmt.Errorf("execute request: %w", err)
 	}
+	defer httpResp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	rawBody, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response body: %w", err)
 	}
 	return &GETEmptyResponse{
-		Response: resp,
-		client:   c,
+		StatusCode: httpResp.StatusCode,
+		RawBody:    rawBody,
+		httpc:      c.base,
 	}, nil
 }
-
-
 
 // Interface with oneOf
 // GET /oneof
+func (c *V1) GETOneof(ctx context.Context, input *edgecases.WithInterface) (*GETOneofResponse, error) {
 
+	path := "/oneof"
 
-// GETOneofResponse holds the response for GETOneof.
-type GETOneofResponse struct {
-	*http.Response
-	client *Client
-	status200 *edgecases.WithInterface
-}
+	requestURL := c.base.BaseURL + path
 
-func (r *GETOneofResponse) StatusOk() (*edgecases.WithInterface, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
-	}
-	if r.status200 != nil {
-		return r.status200, nil
-	}
-	r.status200 = new(edgecases.WithInterface)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
-		return nil, err
-	}
-	return r.status200, nil
-}
-
-// GETOneof — Interface with oneOf
-// GET /oneof
-func (c *Client) GETOneof(ctx context.Context, input *edgecases.WithInterface) (*GETOneofResponse, error) {
-
-	u := c.BaseURL + "/oneof"
-
-
-
-	var body io.Reader
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", u, body)
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", requestURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
+	httpResp, err := c.base.HTTPClient.Do(ctx, httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
+		return nil, fmt.Errorf("execute request: %w", err)
 	}
+	defer httpResp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	rawBody, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response body: %w", err)
 	}
 	return &GETOneofResponse{
-		Response: resp,
-		client:   c,
+		StatusCode: httpResp.StatusCode,
+		RawBody:    rawBody,
+		httpc:      c.base,
 	}, nil
 }
-
-
 
 // Pointer chain
 // GET /pointer-chain
+func (c *V1) GETPointerchain(ctx context.Context, input *edgecases.PointerChain) (*GETPointerchainResponse, error) {
 
+	path := "/pointer-chain"
 
-// GETPointerchainResponse holds the response for GETPointerchain.
-type GETPointerchainResponse struct {
-	*http.Response
-	client *Client
-	status200 *edgecases.PointerChain
-}
+	requestURL := c.base.BaseURL + path
 
-func (r *GETPointerchainResponse) StatusOk() (*edgecases.PointerChain, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
-	}
-	if r.status200 != nil {
-		return r.status200, nil
-	}
-	r.status200 = new(edgecases.PointerChain)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
-		return nil, err
-	}
-	return r.status200, nil
-}
-
-// GETPointerchain — Pointer chain
-// GET /pointer-chain
-func (c *Client) GETPointerchain(ctx context.Context, input *edgecases.PointerChain) (*GETPointerchainResponse, error) {
-
-	u := c.BaseURL + "/pointer-chain"
-
-
-
-	var body io.Reader
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", u, body)
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", requestURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
+	httpResp, err := c.base.HTTPClient.Do(ctx, httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
+		return nil, fmt.Errorf("execute request: %w", err)
 	}
+	defer httpResp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	rawBody, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response body: %w", err)
 	}
 	return &GETPointerchainResponse{
-		Response: resp,
-		client:   c,
+		StatusCode: httpResp.StatusCode,
+		RawBody:    rawBody,
+		httpc:      c.base,
 	}, nil
 }
-
-
 
 // Untyped nil fields
 // GET /untyped-nil
+func (c *V1) GETUntypednil(ctx context.Context, input *edgecases.WithUntypedNil) (*GETUntypednilResponse, error) {
 
+	path := "/untyped-nil"
 
-// GETUntypednilResponse holds the response for GETUntypednil.
-type GETUntypednilResponse struct {
-	*http.Response
-	client *Client
-	status200 *edgecases.WithUntypedNil
+	requestURL := c.base.BaseURL + path
+
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", requestURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	httpResp, err := c.base.HTTPClient.Do(ctx, httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("execute request: %w", err)
+	}
+	defer httpResp.Body.Close()
+
+	rawBody, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response body: %w", err)
+	}
+	return &GETUntypednilResponse{
+		StatusCode: httpResp.StatusCode,
+		RawBody:    rawBody,
+		httpc:      c.base,
+	}, nil
 }
 
-func (r *GETUntypednilResponse) StatusOk() (*edgecases.WithUntypedNil, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
-	}
+// GETCircularResponse is the response for the GETCircular operation.
+type GETCircularResponse struct {
+	StatusCode int
+	RawBody    []byte
+	httpc      *httpc
+	status200 *edgecases.CircularRefA
+}
+
+// StatusOk returns the unmarshaled response body for status 200.
+func (r *GETCircularResponse) StatusOk() (*edgecases.CircularRefA, error) {
 	if r.status200 != nil {
 		return r.status200, nil
 	}
-	r.status200 = new(edgecases.WithUntypedNil)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
+	if r.StatusCode != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	}
+	if r.RawBody == nil || len(r.RawBody) == 0 {
+		return nil, fmt.Errorf("empty response body")
+	}
+	r.status200 = new(edgecases.CircularRefA)
+	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
 		return nil, err
 	}
 	return r.status200, nil
 }
 
-// GETUntypednil — Untyped nil fields
-// GET /untyped-nil
-func (c *Client) GETUntypednil(ctx context.Context, input *edgecases.WithUntypedNil) (*GETUntypednilResponse, error) {
-
-	u := c.BaseURL + "/untyped-nil"
-
-
-
-	var body io.Reader
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", u, body)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
-	}
-	return &GETUntypednilResponse{
-		Response: resp,
-		client:   c,
-	}, nil
+// GETEmptyResponse is the response for the GETEmpty operation.
+type GETEmptyResponse struct {
+	StatusCode int
+	RawBody    []byte
+	httpc      *httpc
+	status200 *edgecases.EmptyStruct
 }
 
+// StatusOk returns the unmarshaled response body for status 200.
+func (r *GETEmptyResponse) StatusOk() (*edgecases.EmptyStruct, error) {
+	if r.status200 != nil {
+		return r.status200, nil
+	}
+	if r.StatusCode != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	}
+	if r.RawBody == nil || len(r.RawBody) == 0 {
+		return nil, fmt.Errorf("empty response body")
+	}
+	r.status200 = new(edgecases.EmptyStruct)
+	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
+		return nil, err
+	}
+	return r.status200, nil
+}
 
+// GETOneofResponse is the response for the GETOneof operation.
+type GETOneofResponse struct {
+	StatusCode int
+	RawBody    []byte
+	httpc      *httpc
+	status200 *edgecases.WithInterface
+}
 
+// StatusOk returns the unmarshaled response body for status 200.
+func (r *GETOneofResponse) StatusOk() (*edgecases.WithInterface, error) {
+	if r.status200 != nil {
+		return r.status200, nil
+	}
+	if r.StatusCode != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	}
+	if r.RawBody == nil || len(r.RawBody) == 0 {
+		return nil, fmt.Errorf("empty response body")
+	}
+	r.status200 = new(edgecases.WithInterface)
+	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
+		return nil, err
+	}
+	return r.status200, nil
+}
+
+// GETPointerchainResponse is the response for the GETPointerchain operation.
+type GETPointerchainResponse struct {
+	StatusCode int
+	RawBody    []byte
+	httpc      *httpc
+	status200 *edgecases.PointerChain
+}
+
+// StatusOk returns the unmarshaled response body for status 200.
+func (r *GETPointerchainResponse) StatusOk() (*edgecases.PointerChain, error) {
+	if r.status200 != nil {
+		return r.status200, nil
+	}
+	if r.StatusCode != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	}
+	if r.RawBody == nil || len(r.RawBody) == 0 {
+		return nil, fmt.Errorf("empty response body")
+	}
+	r.status200 = new(edgecases.PointerChain)
+	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
+		return nil, err
+	}
+	return r.status200, nil
+}
+
+// GETUntypednilResponse is the response for the GETUntypednil operation.
+type GETUntypednilResponse struct {
+	StatusCode int
+	RawBody    []byte
+	httpc      *httpc
+	status200 *edgecases.WithUntypedNil
+}
+
+// StatusOk returns the unmarshaled response body for status 200.
+func (r *GETUntypednilResponse) StatusOk() (*edgecases.WithUntypedNil, error) {
+	if r.status200 != nil {
+		return r.status200, nil
+	}
+	if r.StatusCode != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	}
+	if r.RawBody == nil || len(r.RawBody) == 0 {
+		return nil, fmt.Errorf("empty response body")
+	}
+	r.status200 = new(edgecases.WithUntypedNil)
+	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
+		return nil, err
+	}
+	return r.status200, nil
+}

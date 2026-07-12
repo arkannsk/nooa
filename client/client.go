@@ -81,8 +81,21 @@ var defaultCodecs = map[string]Codec{
 // the built-in registry (JSON, XML, YAML) is consulted. If no codec matches,
 // JSON decoding is used as a final fallback.
 func UnmarshalResponse(resp *http.Response, codecs map[string]Codec, v any) error {
-	ct := resp.Header.Get("Content-Type")
-	mediaType, _, err := mime.ParseMediaType(ct)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("read response body: %w", err)
+	}
+	return UnmarshalBody(body, resp.Header.Get("Content-Type"), codecs, v)
+}
+
+// UnmarshalBody decodes a pre-read body into v using the appropriate Codec
+// based on the Content-Type header value.
+//
+// If codecs is nil or does not contain an entry for the detected media type,
+// the built-in registry (JSON, XML, YAML) is consulted. If no codec matches,
+// JSON decoding is used as a final fallback.
+func UnmarshalBody(body []byte, contentType string, codecs map[string]Codec, v any) error {
+	mediaType, _, err := mime.ParseMediaType(contentType)
 	if err != nil {
 		mediaType = "application/json"
 	}
@@ -100,10 +113,6 @@ func UnmarshalResponse(resp *http.Response, codecs map[string]Codec, v any) erro
 		codec = &JSONCodec{}
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("read response body: %w", err)
-	}
 	if err := codec.Unmarshal(body, v); err != nil {
 		return fmt.Errorf("unmarshal response (%s): %w", mediaType, err)
 	}

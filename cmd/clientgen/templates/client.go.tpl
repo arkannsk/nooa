@@ -6,10 +6,11 @@ package {{ .Package }}
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"net/http"
 	"strings"
+{{- if not .SplitTags }}
+	"fmt"
+	"io"
 {{- if .HasQueryParams }}
 	"net/url"
 {{- end }}
@@ -17,13 +18,16 @@ import (
 	"bytes"
 	"encoding/json"
 {{- end }}
-	"github.com/arkannsk/nooa/client"
+{{- end }}
+	nooaclient "github.com/arkannsk/nooa/client"
+{{- if not .SplitTags }}
 {{- range .Imports }}
 {{- $alias := index $.PackageAliases . }}
 {{- if $alias }}
 	{{ $alias }} {{ . | printf "%q" }}
 {{- else }}
 	{{ . | printf "%q" }}
+{{- end }}
 {{- end }}
 {{- end }}
 )
@@ -43,40 +47,209 @@ func (s *stdHTTPClient) Do(ctx context.Context, req *http.Request) (*http.Respon
 	return s.Client.Do(req.WithContext(ctx))
 }
 
-// Client is the generated HTTP client for {{ .Title }}.
-type Client struct {
+// httpc is the internal HTTP client shared by all tag adapters.
+type httpc struct {
 	BaseURL    string
 	HTTPClient HTTPClient
-
-	// Codec maps Content-Type to client.Codec for response body decoding.
-	// If nil, defaults to JSON decoding for all types.
-	Codec map[string]client.Codec
+	Codec      map[string]nooaclient.Codec
 }
 
-// New creates a new Client.
-// If hc is nil, a default *http.Client is used.
-// If hc is *http.Client, it is automatically wrapped.
-func New(baseURL string, hc any) *Client {
-	var client HTTPClient
+func newHTTPC(baseURL string, hc any) *httpc {
+	var httpClient HTTPClient
 	switch v := hc.(type) {
 	case nil:
-		client = &stdHTTPClient{Client: &http.Client{}}
+		httpClient = &stdHTTPClient{Client: &http.Client{}}
 	case *http.Client:
-		client = &stdHTTPClient{Client: v}
+		httpClient = &stdHTTPClient{Client: v}
 	case HTTPClient:
-		client = v
+		httpClient = v
 	default:
-		client = &stdHTTPClient{Client: &http.Client{}}
+		httpClient = &stdHTTPClient{Client: &http.Client{}}
 	}
-	return &Client{
+	return &httpc{
 		BaseURL:    strings.TrimRight(baseURL, "/"),
-		HTTPClient: client,
+		HTTPClient: httpClient,
 	}
 }
 
-{{ range .Operations }}
+{{- if .SplitTags }}
+// {{ .ClientStructName }} is the top-level client for {{ .Title }}.
+// It provides tag-scoped sub-clients for each API group.
+type {{ .ClientStructName }} struct {
+{{- range .Tags }}
+	// {{ .FieldName }} provides access to the "{{ .Name }}" operations.
+	{{ .FieldName }} {{ .InterfaceName }}
+{{- end }}
+}
+
+// New creates a new {{ .ClientStructName }} client.
+// If hc is nil, a default *http.Client is used.
+// If hc is *http.Client, it is automatically wrapped.
+func New(baseURL string, hc any) *{{ .ClientStructName }} {
+	c := newHTTPC(baseURL, hc)
+	return &{{ .ClientStructName }}{
+{{- range .Tags }}
+		{{ .FieldName }}: &{{ .AdapterTypeName }}{httpc: c},
+{{- end }}
+	}
+}
+{{- else }}
+// {{ .ClientStructName }} is the HTTP client for {{ .Title }}.
+type {{ .ClientStructName }} struct {
+	base *httpc
+}
+
+// New creates a new {{ .ClientStructName }} client.
+// If hc is nil, a default *http.Client is used.
+// If hc is *http.Client, it is automatically wrapped.
+func New(baseURL string, hc any) *{{ .ClientStructName }} {
+	return &{{ .ClientStructName }}{base: newHTTPC(baseURL, hc)}
+}
+
+{{- /* When no split (0 or 1 tag), generate methods directly on ClientStructName */ -}}
+{{- range .Operations }}
+
 // {{ .Summary }}
 // {{ .Method }} {{ .Path }}
-{{ template "method.go.tpl" . }}
+func (c *{{ $.ClientStructName }}) {{ .MethodName }}(ctx context.Context{{ if .HasModelInput }}, input *{{ .ModelInputGoType }}{{ else if .HasParams }}, input *{{ .MethodName }}Request{{ else }}, opts ...nooaclient.RequestOption{{ end }}) {{ if .HasResponse }}(*{{ .MethodName }}Response, error){{ else }}error{{ end }} {
+{{- if .HasRequestBody }}
+	var body io.Reader
+	if input != nil {
+		b, err := json.Marshal(input)
+		if err != nil {
+			return {{ retPrefix .HasResponse }}fmt.Errorf("marshal request body: %w", err)
+		}
+		body = bytes.NewReader(b)
+	}
+{{- end }}
 
-{{ end }}
+	path := "{{ .Path }}"
+{{- range .PathParams }}
+	path = strings.ReplaceAll(path, "{{ "{" }}{{ .Name }}{{ "}" }}", fmt.Sprintf("%v", input.{{ .GoFieldName }}))
+{{- end }}
+
+	requestURL := c.base.BaseURL + path
+{{- if .QueryParams }}
+	queryValues := url.Values{}
+{{- range .QueryParams }}
+{{- if eq .GoType "string" }}
+	if input.{{ .GoFieldName }} != "" {
+		queryValues.Add("{{ .Name }}", input.{{ .GoFieldName }})
+	}
+{{- else if eq .GoType "bool" }}
+	if input.{{ .GoFieldName }} {
+		queryValues.Add("{{ .Name }}", fmt.Sprintf("%v", input.{{ .GoFieldName }}))
+	}
+{{- else }}
+	if input.{{ .GoFieldName }} != 0 {
+		queryValues.Add("{{ .Name }}", fmt.Sprintf("%v", input.{{ .GoFieldName }}))
+	}
+{{- end }}
+{{- end }}
+	if len(queryValues) > 0 {
+		requestURL += "?" + queryValues.Encode()
+	}
+{{- end }}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "{{ .Method }}", requestURL{{ if .HasRequestBody }}, body{{ else }}, nil{{ end }})
+	if err != nil {
+		return {{ retPrefix .HasResponse }}fmt.Errorf("create request: %w", err)
+	}
+{{- if .HasRequestBody }}
+	httpReq.Header.Set("Content-Type", "application/json")
+{{- end }}
+{{- range .HeaderParams }}
+	httpReq.Header.Set("{{ .Name }}", fmt.Sprintf("%v", input.{{ .GoFieldName }}))
+{{- end }}
+
+	httpResp, err := c.base.HTTPClient.Do(ctx, httpReq)
+	if err != nil {
+		return {{ retPrefix .HasResponse }}fmt.Errorf("execute request: %w", err)
+	}
+	defer httpResp.Body.Close()
+
+	rawBody, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return {{ retPrefix .HasResponse }}fmt.Errorf("read response body: %w", err)
+	}
+
+{{- if .HasResponse }}
+	return &{{ .MethodName }}Response{
+		StatusCode: httpResp.StatusCode,
+		RawBody:    rawBody,
+		httpc:      c.base,
+	}, nil
+{{- else }}
+	if httpResp.StatusCode >= 400 {
+		return fmt.Errorf("request failed: status %d, body: %s", httpResp.StatusCode, string(rawBody))
+	}
+	return nil
+{{- end }}
+}
+
+{{- end }}
+{{- end }}
+
+{{- /* Request structs for operations that need them (params without model) */ -}}
+{{- range .Operations }}
+{{- if and (not .HasModelInput) .HasParams }}
+
+// {{ .MethodName }}Request holds the parameters for the {{ .MethodName }} operation.
+type {{ .MethodName }}Request struct {
+{{- range .PathParams }}
+	// {{ .Name }} — {{ .Description }}
+	{{ .GoFieldName }} {{ .GoType }}
+{{- end }}
+{{- range .QueryParams }}
+	// {{ .Name }} — {{ .Description }}
+	{{ .GoFieldName }} {{ .GoType }}
+{{- end }}
+{{- range .HeaderParams }}
+	// {{ .Name }} — {{ .Description }}
+	{{ .GoFieldName }} {{ .GoType }}
+{{- end }}
+}
+
+{{- end }}
+{{- end }}
+
+{{- /* Response types for all operations (only in non-split mode) */ -}}
+{{- if not .SplitTags }}
+{{- range .Operations }}
+{{- if .HasResponse }}
+{{- $methodName := .MethodName }}
+
+// {{ $methodName }}Response is the response for the {{ $methodName }} operation.
+type {{ $methodName }}Response struct {
+	StatusCode int
+	RawBody    []byte
+	httpc      *httpc
+{{- range $status, $field := .ResponseBody.Fields }}
+	status{{ $field.StatusCode }} *{{ $field.GoType }}
+{{- end }}
+}
+
+{{- range $status, $field := .ResponseBody.Fields }}
+
+// Status{{ toGoTypeName (printf "%d" $field.StatusCode) }} returns the unmarshaled response body for status {{ $field.StatusCode }}.
+func (r *{{ $methodName }}Response) Status{{ toGoTypeName (printf "%d" $field.StatusCode) }}() (*{{ $field.GoType }}, error) {
+	if r.status{{ $field.StatusCode }} != nil {
+		return r.status{{ $field.StatusCode }}, nil
+	}
+	if r.StatusCode != {{ $field.StatusCode }} {
+		return nil, fmt.Errorf("expected status {{ $field.StatusCode }}, got %d", r.StatusCode)
+	}
+	if r.RawBody == nil || len(r.RawBody) == 0 {
+		return nil, fmt.Errorf("empty response body")
+	}
+	r.status{{ $field.StatusCode }} = new({{ $field.GoType }})
+	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status{{ $field.StatusCode }}); err != nil {
+		return nil, err
+	}
+	return r.status{{ $field.StatusCode }}, nil
+}
+
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

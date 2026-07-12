@@ -32,8 +32,10 @@ func NewGenerator(info *PackageInfo, cfg *Config) *Generator {
 	}
 }
 
-// Generate renders the client Go code.
-func (g *Generator) Generate() ([]byte, error) {
+// GenerateFiles renders the client Go code as multiple files.
+// Returns map of filename -> content.
+// Files: "client.go" (main client), "<tag>.go" (per-tag interface + adapter).
+func (g *Generator) GenerateFiles() (map[string][]byte, error) {
 	funcMap := template.FuncMap{
 		"toGoName":    toGoName,
 		"toGoTypeName": toGoTypeName,
@@ -50,25 +52,223 @@ func (g *Generator) Generate() ([]byte, error) {
 
 	data := g.buildTemplateData()
 
+	files := make(map[string][]byte)
+
+	// Main client file
 	var buf bytes.Buffer
 	if err := tmpl.ExecuteTemplate(&buf, "client.go.tpl", data); err != nil {
-		return nil, fmt.Errorf("execute template: %w", err)
+		return nil, fmt.Errorf("execute client template: %w", err)
+	}
+	files["client.go"] = buf.Bytes()
+
+	// Per-tag files — only generated when there are 2+ distinct tags
+	tagOps := g.groupOperationsByTag(data.Operations)
+	if len(tagOps) < 2 {
+		// Single tag or no tags — all operations live in client.go, no split needed
+		return files, nil
+	}
+	for tagName, ops := range tagOps {
+		var buf bytes.Buffer
+		typeName := sanitizeTypeName(tagName)
+		tagData := TagData{
+			Package:         data.Package,
+			Title:           data.Title,
+			Version:         data.Version,
+			TagName:         tagName,
+			InterfaceName:   sanitizeInterfaceName(tagName),
+			AdapterTypeName: strings.ToLower(typeName[:1]) + typeName[1:] + "Adapter",
+			Operations:      ops,
+			PackageAliases:  data.PackageAliases,
+		}
+		// Collect imports needed by this tag's operations.
+		usedImports := make(map[string]bool)
+		for _, op := range ops {
+			if op.ModelInputGoType != "" {
+				for _, imp := range data.Imports {
+					alias := data.PackageAliases[imp]
+					if strings.HasPrefix(op.ModelInputGoType, alias) {
+						usedImports[imp] = true
+					}
+				}
+			}
+			if op.RequestBody != nil && op.RequestBody.ImportPath != "" {
+				usedImports[op.RequestBody.ImportPath] = true
+			}
+			// Collect imports from response types
+			if op.ResponseBody != nil {
+				for _, field := range op.ResponseBody.Fields {
+					for _, imp := range data.Imports {
+						alias := data.PackageAliases[imp]
+						if strings.HasPrefix(field.GoType, alias) {
+							usedImports[imp] = true
+						}
+					}
+				}
+			}
+		}
+		tagData.Imports = make([]string, 0, len(usedImports))
+		for imp := range usedImports {
+			tagData.Imports = append(tagData.Imports, imp)
+		}
+		sort.Strings(tagData.Imports)
+		// Determine flags for the tag template
+		for _, op := range ops {
+			if !op.HasModelInput && !op.HasParams {
+				tagData.NeedsClientPkg = true
+				break
+			}
+			// Also need nooa/client for UnmarshalBody in response helpers
+			if op.HasResponse {
+				tagData.NeedsClientPkg = true
+				break
+			}
+		}
+		for _, op := range ops {
+			if op.HasRequestBody {
+				tagData.HasRequestBody = true
+				break
+			}
+		}
+		for _, op := range ops {
+			if len(op.QueryParams) > 0 {
+				tagData.HasQueryParams = true
+				break
+			}
+		}
+		for _, op := range ops {
+			if len(op.PathParams) > 0 {
+				tagData.HasPathParams = true
+				break
+			}
+		}
+		if err := tmpl.ExecuteTemplate(&buf, "tag.go.tpl", tagData); err != nil {
+			return nil, fmt.Errorf("execute tag template %q: %w", tagName, err)
+		}
+		filename := sanitizeFilename(tagName) + ".go"
+		files[filename] = buf.Bytes()
 	}
 
-	return buf.Bytes(), nil
+	return files, nil
+}
+
+// Generate is a backward-compatible wrapper that returns only client.go.
+func (g *Generator) Generate() ([]byte, error) {
+	files, err := g.GenerateFiles()
+	if err != nil {
+		return nil, err
+	}
+	return files["client.go"], nil
+}
+
+// groupOperationsByTag groups operations by their first tag.
+// Operations with no tags are grouped under "_" (default).
+func (g *Generator) groupOperationsByTag(ops []*OperationData) map[string][]*OperationData {
+	tagOps := make(map[string][]*OperationData)
+	for _, op := range ops {
+		tag := "_"
+		if len(op.Tags) > 0 {
+			tag = op.Tags[0]
+		}
+		tagOps[tag] = append(tagOps[tag], op)
+	}
+	return tagOps
+}
+
+// sanitizeInterfaceName produces a valid Go interface name from a tag string.
+func sanitizeInterfaceName(tag string) string {
+	// "Edge Cases" -> "EdgeCases", "HTTP-Params" -> "HTTPParams"
+	name := strings.ReplaceAll(tag, " ", "")
+	name = strings.ReplaceAll(name, "-", "")
+	name = strings.ReplaceAll(name, "_", "")
+	// Remove non-alphanumeric except letters/digits
+	var b strings.Builder
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		}
+	}
+	result := b.String()
+	if result == "" || (result[0] >= '0' && result[0] <= '9') {
+		result = "Ops" + result
+	}
+	return result + "Client"
+}
+
+// sanitizeTypeName produces a valid Go type name from a tag string.
+func sanitizeTypeName(tag string) string {
+	name := strings.ReplaceAll(tag, " ", "")
+	name = strings.ReplaceAll(name, "-", "")
+	name = strings.ReplaceAll(name, "_", "")
+	var b strings.Builder
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		}
+	}
+	result := b.String()
+	if result == "" || (result[0] >= '0' && result[0] <= '9') {
+		result = "Ops" + result
+	}
+	return result
+}
+
+// sanitizeFilename produces a valid filename from a tag string.
+func sanitizeFilename(tag string) string {
+	name := strings.ToLower(tag)
+	name = strings.ReplaceAll(name, " ", "_")
+	name = strings.ReplaceAll(name, "-", "_")
+	var b strings.Builder
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' {
+			b.WriteRune(r)
+		}
+	}
+	result := b.String()
+	if result == "" {
+		result = "default"
+	}
+	return result
+}
+
+// TagData holds data for a single tag interface + adapter file.
+type TagData struct {
+	Package           string
+	Title             string
+	Version           string
+	TagName           string
+	InterfaceName     string
+	AdapterTypeName   string // unexported adapter type, e.g. "mixed"
+	Operations        []*OperationData
+	Imports           []string            // model imports needed by this tag's operations
+	PackageAliases    map[string]string   // import path -> alias
+	NeedsClientPkg    bool                // true if any operation uses ...client.RequestOption or has response
+	HasRequestBody    bool
+	HasQueryParams    bool
+	HasPathParams     bool
 }
 
 // TemplateData holds all data passed to the template.
 type TemplateData struct {
-	Package             string
-	Title               string
-	Version             string
-	Imports             []string
-	PackageAliases      map[string]string // import path -> alias
-	Operations          []*OperationData
-	HasQueryParams      bool
-	HasRequestBody      bool
+	Package              string
+	Title                string
+	Version              string
+	ClientStructName     string            // exported top-level struct name, e.g. "V1"
+	SplitTags            bool              // true when 2+ distinct tags exist
+	Imports              []string
+	PackageAliases       map[string]string // import path -> alias
+	Operations           []*OperationData
+	HasQueryParams       bool
+	HasRequestBody       bool
 	HasStreamingResponse bool
+	Tags                 []TagInfo // tag groups for the top-level client struct
+}
+
+// TagInfo holds info about a tag group for generating the top-level client.
+type TagInfo struct {
+	Name            string // original tag name, e.g. "Mixed"
+	InterfaceName   string // exported interface, e.g. "MixedClient"
+	FieldName       string // exported field name in top-level struct, e.g. "Mixed"
+	AdapterTypeName string // unexported adapter type, e.g. "mixed"
 }
 
 // OperationData holds parsed data for a single operation.
@@ -92,6 +292,12 @@ type OperationData struct {
 	UsesModelAsInput bool
 	// ModelInputGoType — the model type with package alias prefix (e.g. "httpparams.QueryParams").
 	ModelInputGoType string
+	// HasModelInput — convenience flag for templates (same as UsesModelAsInput).
+	HasModelInput bool
+	// HasParams — true when the method has query/header/path parameters.
+	HasParams bool
+	// HasResponse — true when the method returns a response body.
+	HasResponse bool
 }
 
 // ParameterData holds data for a single parameter.
@@ -192,6 +398,28 @@ func (g *Generator) buildTemplateData() *TemplateData {
 		}
 	}
 	data.Operations = ops
+
+	// Build tag info for the top-level client struct
+	tagOps := g.groupOperationsByTag(ops)
+	for tagName := range tagOps {
+		ifaceName := sanitizeInterfaceName(tagName)
+		typeName := sanitizeTypeName(tagName)
+		data.Tags = append(data.Tags, TagInfo{
+			Name:            tagName,
+			InterfaceName:   ifaceName,
+			FieldName:       typeName,
+			AdapterTypeName: strings.ToLower(typeName[:1]) + typeName[1:] + "Adapter",
+		})
+	}
+	sort.Slice(data.Tags, func(i, j int) bool {
+		return data.Tags[i].Name < data.Tags[j].Name
+	})
+
+	// Determine top-level struct name: "V1" by default, or title translit
+	data.ClientStructName = "V1"
+
+	// Split tags: generate separate tag files only when 2+ distinct tags exist
+	data.SplitTags = len(tagOps) >= 2
 
 	return data
 }
@@ -308,6 +536,11 @@ func (g *Generator) buildOperationData(route RouteInfo) *OperationData {
 			od.SuccessCodes = successCodes
 		}
 	}
+
+	// Convenience flags for tag template
+	od.HasModelInput = od.UsesModelAsInput
+	od.HasParams = len(od.QueryParams) > 0 || len(od.HeaderParams) > 0 || len(od.PathParams) > 0
+	od.HasResponse = od.ResponseBody != nil
 
 	return od
 }

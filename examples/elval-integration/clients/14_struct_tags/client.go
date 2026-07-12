@@ -5,13 +5,13 @@ package structtagsdemo
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"net/http"
 	"strings"
+	"fmt"
+	"io"
 	"bytes"
 	"encoding/json"
-	"github.com/arkannsk/nooa/client"
+	nooaclient "github.com/arkannsk/nooa/client"
 	structtags "github.com/arkannsk/nooa/examples/models/14_struct_tags"
 )
 
@@ -30,269 +30,271 @@ func (s *stdHTTPClient) Do(ctx context.Context, req *http.Request) (*http.Respon
 	return s.Client.Do(req.WithContext(ctx))
 }
 
-// Client is the generated HTTP client for 14 Struct Tags Demo.
-type Client struct {
+// httpc is the internal HTTP client shared by all tag adapters.
+type httpc struct {
 	BaseURL    string
 	HTTPClient HTTPClient
-
-	// Codec maps Content-Type to client.Codec for response body decoding.
-	// If nil, defaults to JSON decoding for all types.
-	Codec map[string]client.Codec
+	Codec      map[string]nooaclient.Codec
 }
 
-// New creates a new Client.
-// If hc is nil, a default *http.Client is used.
-// If hc is *http.Client, it is automatically wrapped.
-func New(baseURL string, hc any) *Client {
-	var client HTTPClient
+func newHTTPC(baseURL string, hc any) *httpc {
+	var httpClient HTTPClient
 	switch v := hc.(type) {
 	case nil:
-		client = &stdHTTPClient{Client: &http.Client{}}
+		httpClient = &stdHTTPClient{Client: &http.Client{}}
 	case *http.Client:
-		client = &stdHTTPClient{Client: v}
+		httpClient = &stdHTTPClient{Client: v}
 	case HTTPClient:
-		client = v
+		httpClient = v
 	default:
-		client = &stdHTTPClient{Client: &http.Client{}}
+		httpClient = &stdHTTPClient{Client: &http.Client{}}
 	}
-	return &Client{
+	return &httpc{
 		BaseURL:    strings.TrimRight(baseURL, "/"),
-		HTTPClient: client,
+		HTTPClient: httpClient,
 	}
 }
+// V1 is the HTTP client for 14 Struct Tags Demo.
+type V1 struct {
+	base *httpc
+}
 
+// New creates a new V1 client.
+// If hc is nil, a default *http.Client is used.
+// If hc is *http.Client, it is automatically wrapped.
+func New(baseURL string, hc any) *V1 {
+	return &V1{base: newHTTPC(baseURL, hc)}
+}
 
 // Handle JSON tags
 // POST /json
-
-
-// POSTJsonResponse holds the response for POSTJson.
-type POSTJsonResponse struct {
-	*http.Response
-	client *Client
-	status200 *structtags.JsonTagModel
-}
-
-func (r *POSTJsonResponse) StatusOk() (*structtags.JsonTagModel, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
-	}
-	if r.status200 != nil {
-		return r.status200, nil
-	}
-	r.status200 = new(structtags.JsonTagModel)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
-		return nil, err
-	}
-	return r.status200, nil
-}
-
-// POSTJson — Handle JSON tags
-// POST /json
-func (c *Client) POSTJson(ctx context.Context, input *structtags.JsonTagModel) (*POSTJsonResponse, error) {
-
-	u := c.BaseURL + "/json"
-
-
-
+func (c *V1) POSTJson(ctx context.Context, input *structtags.JsonTagModel) (*POSTJsonResponse, error) {
 	var body io.Reader
-	b, err := json.Marshal(input)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request body: %w", err)
+	if input != nil {
+		b, err := json.Marshal(input)
+		if err != nil {
+			return nil, fmt.Errorf("marshal request body: %w", err)
+		}
+		body = bytes.NewReader(b)
 	}
-	body = bytes.NewReader(b)
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", u, body)
+	path := "/json"
+
+	requestURL := c.base.BaseURL + path
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", requestURL, body)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
+	httpResp, err := c.base.HTTPClient.Do(ctx, httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
+		return nil, fmt.Errorf("execute request: %w", err)
 	}
+	defer httpResp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	rawBody, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response body: %w", err)
 	}
 	return &POSTJsonResponse{
-		Response: resp,
-		client:   c,
+		StatusCode: httpResp.StatusCode,
+		RawBody:    rawBody,
+		httpc:      c.base,
 	}, nil
 }
-
-
 
 // Handle mixed tags
 // GET /mixed
+func (c *V1) GETMixed(ctx context.Context, input *structtags.MixedTagsModel) (*GETMixedResponse, error) {
 
+	path := "/mixed"
 
-// GETMixedResponse holds the response for GETMixed.
-type GETMixedResponse struct {
-	*http.Response
-	client *Client
-	status200 *structtags.MixedTagsModel
-}
+	requestURL := c.base.BaseURL + path
 
-func (r *GETMixedResponse) StatusOk() (*structtags.MixedTagsModel, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
-	}
-	if r.status200 != nil {
-		return r.status200, nil
-	}
-	r.status200 = new(structtags.MixedTagsModel)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
-		return nil, err
-	}
-	return r.status200, nil
-}
-
-// GETMixed — Handle mixed tags
-// GET /mixed
-func (c *Client) GETMixed(ctx context.Context, input *structtags.MixedTagsModel) (*GETMixedResponse, error) {
-
-	u := c.BaseURL + "/mixed"
-
-
-
-	var body io.Reader
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", u, body)
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", requestURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
+	httpResp, err := c.base.HTTPClient.Do(ctx, httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
+		return nil, fmt.Errorf("execute request: %w", err)
 	}
+	defer httpResp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	rawBody, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response body: %w", err)
 	}
 	return &GETMixedResponse{
-		Response: resp,
-		client:   c,
+		StatusCode: httpResp.StatusCode,
+		RawBody:    rawBody,
+		httpc:      c.base,
 	}, nil
 }
-
-
 
 // Handle XML tags
 // GET /xml
+func (c *V1) GETXml(ctx context.Context, input *structtags.XmlTagModel) (*GETXmlResponse, error) {
 
+	path := "/xml"
 
-// GETXmlResponse holds the response for GETXml.
-type GETXmlResponse struct {
-	*http.Response
-	client *Client
-	status200 *structtags.XmlTagModel
-}
+	requestURL := c.base.BaseURL + path
 
-func (r *GETXmlResponse) StatusOk() (*structtags.XmlTagModel, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
-	}
-	if r.status200 != nil {
-		return r.status200, nil
-	}
-	r.status200 = new(structtags.XmlTagModel)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
-		return nil, err
-	}
-	return r.status200, nil
-}
-
-// GETXml — Handle XML tags
-// GET /xml
-func (c *Client) GETXml(ctx context.Context, input *structtags.XmlTagModel) (*GETXmlResponse, error) {
-
-	u := c.BaseURL + "/xml"
-
-
-
-	var body io.Reader
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", u, body)
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", requestURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
+	httpResp, err := c.base.HTTPClient.Do(ctx, httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
+		return nil, fmt.Errorf("execute request: %w", err)
 	}
+	defer httpResp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
+	rawBody, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response body: %w", err)
 	}
 	return &GETXmlResponse{
-		Response: resp,
-		client:   c,
+		StatusCode: httpResp.StatusCode,
+		RawBody:    rawBody,
+		httpc:      c.base,
 	}, nil
 }
-
-
 
 // Handle YAML tags
 // GET /yaml
+func (c *V1) GETYaml(ctx context.Context, input *structtags.YamlTagModel) (*GETYamlResponse, error) {
 
+	path := "/yaml"
 
-// GETYamlResponse holds the response for GETYaml.
-type GETYamlResponse struct {
-	*http.Response
-	client *Client
-	status200 *structtags.YamlTagModel
+	requestURL := c.base.BaseURL + path
+
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", requestURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	httpResp, err := c.base.HTTPClient.Do(ctx, httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("execute request: %w", err)
+	}
+	defer httpResp.Body.Close()
+
+	rawBody, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response body: %w", err)
+	}
+	return &GETYamlResponse{
+		StatusCode: httpResp.StatusCode,
+		RawBody:    rawBody,
+		httpc:      c.base,
+	}, nil
 }
 
-func (r *GETYamlResponse) StatusOk() (*structtags.YamlTagModel, error) {
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
-	}
+// POSTJsonResponse is the response for the POSTJson operation.
+type POSTJsonResponse struct {
+	StatusCode int
+	RawBody    []byte
+	httpc      *httpc
+	status200 *structtags.JsonTagModel
+}
+
+// StatusOk returns the unmarshaled response body for status 200.
+func (r *POSTJsonResponse) StatusOk() (*structtags.JsonTagModel, error) {
 	if r.status200 != nil {
 		return r.status200, nil
 	}
-	r.status200 = new(structtags.YamlTagModel)
-	if err := client.UnmarshalResponse(r.Response, r.client.Codec, r.status200); err != nil {
+	if r.StatusCode != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	}
+	if r.RawBody == nil || len(r.RawBody) == 0 {
+		return nil, fmt.Errorf("empty response body")
+	}
+	r.status200 = new(structtags.JsonTagModel)
+	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
 		return nil, err
 	}
 	return r.status200, nil
 }
 
-// GETYaml — Handle YAML tags
-// GET /yaml
-func (c *Client) GETYaml(ctx context.Context, input *structtags.YamlTagModel) (*GETYamlResponse, error) {
-
-	u := c.BaseURL + "/yaml"
-
-
-
-	var body io.Reader
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", u, body)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-
-	resp, err := c.HTTPClient.Do(ctx, httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		rb, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("request failed: status %d, body: %s", resp.StatusCode, string(rb))
-	}
-	return &GETYamlResponse{
-		Response: resp,
-		client:   c,
-	}, nil
+// GETMixedResponse is the response for the GETMixed operation.
+type GETMixedResponse struct {
+	StatusCode int
+	RawBody    []byte
+	httpc      *httpc
+	status200 *structtags.MixedTagsModel
 }
 
+// StatusOk returns the unmarshaled response body for status 200.
+func (r *GETMixedResponse) StatusOk() (*structtags.MixedTagsModel, error) {
+	if r.status200 != nil {
+		return r.status200, nil
+	}
+	if r.StatusCode != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	}
+	if r.RawBody == nil || len(r.RawBody) == 0 {
+		return nil, fmt.Errorf("empty response body")
+	}
+	r.status200 = new(structtags.MixedTagsModel)
+	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
+		return nil, err
+	}
+	return r.status200, nil
+}
 
+// GETXmlResponse is the response for the GETXml operation.
+type GETXmlResponse struct {
+	StatusCode int
+	RawBody    []byte
+	httpc      *httpc
+	status200 *structtags.XmlTagModel
+}
 
+// StatusOk returns the unmarshaled response body for status 200.
+func (r *GETXmlResponse) StatusOk() (*structtags.XmlTagModel, error) {
+	if r.status200 != nil {
+		return r.status200, nil
+	}
+	if r.StatusCode != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	}
+	if r.RawBody == nil || len(r.RawBody) == 0 {
+		return nil, fmt.Errorf("empty response body")
+	}
+	r.status200 = new(structtags.XmlTagModel)
+	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
+		return nil, err
+	}
+	return r.status200, nil
+}
+
+// GETYamlResponse is the response for the GETYaml operation.
+type GETYamlResponse struct {
+	StatusCode int
+	RawBody    []byte
+	httpc      *httpc
+	status200 *structtags.YamlTagModel
+}
+
+// StatusOk returns the unmarshaled response body for status 200.
+func (r *GETYamlResponse) StatusOk() (*structtags.YamlTagModel, error) {
+	if r.status200 != nil {
+		return r.status200, nil
+	}
+	if r.StatusCode != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	}
+	if r.RawBody == nil || len(r.RawBody) == 0 {
+		return nil, fmt.Errorf("empty response body")
+	}
+	r.status200 = new(structtags.YamlTagModel)
+	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
+		return nil, err
+	}
+	return r.status200, nil
+}
