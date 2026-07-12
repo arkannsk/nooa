@@ -9,13 +9,14 @@ import (
 	"net/http"
 	"strings"
 {{- if not .SplitTags }}
+	"bytes"
 	"fmt"
 	"io"
+	"sync"
 {{- if .HasQueryParams }}
 	"net/url"
 {{- end }}
 {{- if .HasRequestBody }}
-	"bytes"
 	"encoding/json"
 {{- end }}
 {{- end }}
@@ -166,21 +167,16 @@ func (c *{{ $.ClientStructName }}) {{ .MethodName }}(ctx context.Context{{ if .H
 	if err != nil {
 		return {{ retPrefix .HasResponse }}fmt.Errorf("execute request: %w", err)
 	}
-	defer httpResp.Body.Close()
-
-	rawBody, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return {{ retPrefix .HasResponse }}fmt.Errorf("read response body: %w", err)
-	}
 
 {{- if .HasResponse }}
 	return &{{ .MethodName }}Response{
-		StatusCode: httpResp.StatusCode,
-		RawBody:    rawBody,
-		httpc:      c.base,
+		resp:  httpResp,
+		codec: c.base.Codec,
 	}, nil
 {{- else }}
+	defer httpResp.Body.Close()
 	if httpResp.StatusCode >= 400 {
+		rawBody, _ := io.ReadAll(httpResp.Body)
 		return fmt.Errorf("request failed: status %d, body: %s", httpResp.StatusCode, string(rawBody))
 	}
 	return nil
@@ -220,13 +216,54 @@ type {{ .MethodName }}Request struct {
 {{- $methodName := .MethodName }}
 
 // {{ $methodName }}Response is the response for the {{ $methodName }} operation.
+// Call Close() when done to release the response body.
 type {{ $methodName }}Response struct {
-	StatusCode int
-	RawBody    []byte
-	httpc      *httpc
+	resp     *http.Response
+	codec    map[string]nooaclient.Codec
+	bodyOnce sync.Once
 {{- range $status, $field := .ResponseBody.Fields }}
 	status{{ $field.StatusCode }} *{{ $field.GoType }}
 {{- end }}
+}
+
+// Close releases the response body. Always call when done.
+func (r *{{ $methodName }}Response) Close() error {
+	if r.resp != nil {
+		return r.resp.Body.Close()
+	}
+	return nil
+}
+
+// Body returns an io.ReadCloser for the response body.
+// After the body is read (e.g. via StatusOk()), a new reader over the cached data is returned.
+func (r *{{ $methodName }}Response) Body() io.ReadCloser {
+	if r.resp != nil {
+		return r.resp.Body
+	}
+	return nil
+}
+
+// readBody reads the response body once and replaces resp.Body with a cached reader
+// so subsequent reads (Body(), further Status* calls) can reuse the data.
+func (r *{{ $methodName }}Response) readBody() error {
+	var err error
+	r.bodyOnce.Do(func() {
+		data, readErr := io.ReadAll(r.resp.Body)
+		if readErr != nil {
+			err = readErr
+			return
+		}
+		r.resp.Body = io.NopCloser(bytes.NewReader(data))
+	})
+	return err
+}
+
+// StatusCode returns the HTTP status code of the response.
+func (r *{{ $methodName }}Response) StatusCode() int {
+	if r.resp != nil {
+		return r.resp.StatusCode
+	}
+	return 0
 }
 
 {{- range $status, $field := .ResponseBody.Fields }}
@@ -236,14 +273,14 @@ func (r *{{ $methodName }}Response) Status{{ toGoTypeName (printf "%d" $field.St
 	if r.status{{ $field.StatusCode }} != nil {
 		return r.status{{ $field.StatusCode }}, nil
 	}
-	if r.StatusCode != {{ $field.StatusCode }} {
-		return nil, fmt.Errorf("expected status {{ $field.StatusCode }}, got %d", r.StatusCode)
+	if r.StatusCode() != {{ $field.StatusCode }} {
+		return nil, fmt.Errorf("expected status {{ $field.StatusCode }}, got %d", r.StatusCode())
 	}
-	if r.RawBody == nil || len(r.RawBody) == 0 {
-		return nil, fmt.Errorf("empty response body")
+	if err := r.readBody(); err != nil {
+		return nil, err
 	}
 	r.status{{ $field.StatusCode }} = new({{ $field.GoType }})
-	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status{{ $field.StatusCode }}); err != nil {
+	if err := nooaclient.UnmarshalResponse(r.resp, r.codec, r.status{{ $field.StatusCode }}); err != nil {
 		return nil, err
 	}
 	return r.status{{ $field.StatusCode }}, nil

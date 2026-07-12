@@ -7,9 +7,10 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"bytes"
 	"fmt"
 	"io"
-	"bytes"
+	"sync"
 	"encoding/json"
 	nooaclient "github.com/arkannsk/nooa/client"
 	structtags "github.com/arkannsk/nooa/examples/models/14_struct_tags"
@@ -92,16 +93,9 @@ func (c *V1) POSTJson(ctx context.Context, input *structtags.JsonTagModel) (*POS
 	if err != nil {
 		return nil, fmt.Errorf("execute request: %w", err)
 	}
-	defer httpResp.Body.Close()
-
-	rawBody, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response body: %w", err)
-	}
 	return &POSTJsonResponse{
-		StatusCode: httpResp.StatusCode,
-		RawBody:    rawBody,
-		httpc:      c.base,
+		resp:  httpResp,
+		codec: c.base.Codec,
 	}, nil
 }
 
@@ -122,16 +116,9 @@ func (c *V1) GETMixed(ctx context.Context, input *structtags.MixedTagsModel) (*G
 	if err != nil {
 		return nil, fmt.Errorf("execute request: %w", err)
 	}
-	defer httpResp.Body.Close()
-
-	rawBody, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response body: %w", err)
-	}
 	return &GETMixedResponse{
-		StatusCode: httpResp.StatusCode,
-		RawBody:    rawBody,
-		httpc:      c.base,
+		resp:  httpResp,
+		codec: c.base.Codec,
 	}, nil
 }
 
@@ -152,16 +139,9 @@ func (c *V1) GETXml(ctx context.Context, input *structtags.XmlTagModel) (*GETXml
 	if err != nil {
 		return nil, fmt.Errorf("execute request: %w", err)
 	}
-	defer httpResp.Body.Close()
-
-	rawBody, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response body: %w", err)
-	}
 	return &GETXmlResponse{
-		StatusCode: httpResp.StatusCode,
-		RawBody:    rawBody,
-		httpc:      c.base,
+		resp:  httpResp,
+		codec: c.base.Codec,
 	}, nil
 }
 
@@ -182,25 +162,59 @@ func (c *V1) GETYaml(ctx context.Context, input *structtags.YamlTagModel) (*GETY
 	if err != nil {
 		return nil, fmt.Errorf("execute request: %w", err)
 	}
-	defer httpResp.Body.Close()
-
-	rawBody, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response body: %w", err)
-	}
 	return &GETYamlResponse{
-		StatusCode: httpResp.StatusCode,
-		RawBody:    rawBody,
-		httpc:      c.base,
+		resp:  httpResp,
+		codec: c.base.Codec,
 	}, nil
 }
 
 // POSTJsonResponse is the response for the POSTJson operation.
+// Call Close() when done to release the response body.
 type POSTJsonResponse struct {
-	StatusCode int
-	RawBody    []byte
-	httpc      *httpc
+	resp     *http.Response
+	codec    map[string]nooaclient.Codec
+	bodyOnce sync.Once
 	status200 *structtags.JsonTagModel
+}
+
+// Close releases the response body. Always call when done.
+func (r *POSTJsonResponse) Close() error {
+	if r.resp != nil {
+		return r.resp.Body.Close()
+	}
+	return nil
+}
+
+// Body returns an io.ReadCloser for the response body.
+// After the body is read (e.g. via StatusOk()), a new reader over the cached data is returned.
+func (r *POSTJsonResponse) Body() io.ReadCloser {
+	if r.resp != nil {
+		return r.resp.Body
+	}
+	return nil
+}
+
+// readBody reads the response body once and replaces resp.Body with a cached reader
+// so subsequent reads (Body(), further Status* calls) can reuse the data.
+func (r *POSTJsonResponse) readBody() error {
+	var err error
+	r.bodyOnce.Do(func() {
+		data, readErr := io.ReadAll(r.resp.Body)
+		if readErr != nil {
+			err = readErr
+			return
+		}
+		r.resp.Body = io.NopCloser(bytes.NewReader(data))
+	})
+	return err
+}
+
+// StatusCode returns the HTTP status code of the response.
+func (r *POSTJsonResponse) StatusCode() int {
+	if r.resp != nil {
+		return r.resp.StatusCode
+	}
+	return 0
 }
 
 // StatusOk returns the unmarshaled response body for status 200.
@@ -208,25 +222,66 @@ func (r *POSTJsonResponse) StatusOk() (*structtags.JsonTagModel, error) {
 	if r.status200 != nil {
 		return r.status200, nil
 	}
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	if r.StatusCode() != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode())
 	}
-	if r.RawBody == nil || len(r.RawBody) == 0 {
-		return nil, fmt.Errorf("empty response body")
+	if err := r.readBody(); err != nil {
+		return nil, err
 	}
 	r.status200 = new(structtags.JsonTagModel)
-	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
+	if err := nooaclient.UnmarshalResponse(r.resp, r.codec, r.status200); err != nil {
 		return nil, err
 	}
 	return r.status200, nil
 }
 
 // GETMixedResponse is the response for the GETMixed operation.
+// Call Close() when done to release the response body.
 type GETMixedResponse struct {
-	StatusCode int
-	RawBody    []byte
-	httpc      *httpc
+	resp     *http.Response
+	codec    map[string]nooaclient.Codec
+	bodyOnce sync.Once
 	status200 *structtags.MixedTagsModel
+}
+
+// Close releases the response body. Always call when done.
+func (r *GETMixedResponse) Close() error {
+	if r.resp != nil {
+		return r.resp.Body.Close()
+	}
+	return nil
+}
+
+// Body returns an io.ReadCloser for the response body.
+// After the body is read (e.g. via StatusOk()), a new reader over the cached data is returned.
+func (r *GETMixedResponse) Body() io.ReadCloser {
+	if r.resp != nil {
+		return r.resp.Body
+	}
+	return nil
+}
+
+// readBody reads the response body once and replaces resp.Body with a cached reader
+// so subsequent reads (Body(), further Status* calls) can reuse the data.
+func (r *GETMixedResponse) readBody() error {
+	var err error
+	r.bodyOnce.Do(func() {
+		data, readErr := io.ReadAll(r.resp.Body)
+		if readErr != nil {
+			err = readErr
+			return
+		}
+		r.resp.Body = io.NopCloser(bytes.NewReader(data))
+	})
+	return err
+}
+
+// StatusCode returns the HTTP status code of the response.
+func (r *GETMixedResponse) StatusCode() int {
+	if r.resp != nil {
+		return r.resp.StatusCode
+	}
+	return 0
 }
 
 // StatusOk returns the unmarshaled response body for status 200.
@@ -234,25 +289,66 @@ func (r *GETMixedResponse) StatusOk() (*structtags.MixedTagsModel, error) {
 	if r.status200 != nil {
 		return r.status200, nil
 	}
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	if r.StatusCode() != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode())
 	}
-	if r.RawBody == nil || len(r.RawBody) == 0 {
-		return nil, fmt.Errorf("empty response body")
+	if err := r.readBody(); err != nil {
+		return nil, err
 	}
 	r.status200 = new(structtags.MixedTagsModel)
-	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
+	if err := nooaclient.UnmarshalResponse(r.resp, r.codec, r.status200); err != nil {
 		return nil, err
 	}
 	return r.status200, nil
 }
 
 // GETXmlResponse is the response for the GETXml operation.
+// Call Close() when done to release the response body.
 type GETXmlResponse struct {
-	StatusCode int
-	RawBody    []byte
-	httpc      *httpc
+	resp     *http.Response
+	codec    map[string]nooaclient.Codec
+	bodyOnce sync.Once
 	status200 *structtags.XmlTagModel
+}
+
+// Close releases the response body. Always call when done.
+func (r *GETXmlResponse) Close() error {
+	if r.resp != nil {
+		return r.resp.Body.Close()
+	}
+	return nil
+}
+
+// Body returns an io.ReadCloser for the response body.
+// After the body is read (e.g. via StatusOk()), a new reader over the cached data is returned.
+func (r *GETXmlResponse) Body() io.ReadCloser {
+	if r.resp != nil {
+		return r.resp.Body
+	}
+	return nil
+}
+
+// readBody reads the response body once and replaces resp.Body with a cached reader
+// so subsequent reads (Body(), further Status* calls) can reuse the data.
+func (r *GETXmlResponse) readBody() error {
+	var err error
+	r.bodyOnce.Do(func() {
+		data, readErr := io.ReadAll(r.resp.Body)
+		if readErr != nil {
+			err = readErr
+			return
+		}
+		r.resp.Body = io.NopCloser(bytes.NewReader(data))
+	})
+	return err
+}
+
+// StatusCode returns the HTTP status code of the response.
+func (r *GETXmlResponse) StatusCode() int {
+	if r.resp != nil {
+		return r.resp.StatusCode
+	}
+	return 0
 }
 
 // StatusOk returns the unmarshaled response body for status 200.
@@ -260,25 +356,66 @@ func (r *GETXmlResponse) StatusOk() (*structtags.XmlTagModel, error) {
 	if r.status200 != nil {
 		return r.status200, nil
 	}
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	if r.StatusCode() != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode())
 	}
-	if r.RawBody == nil || len(r.RawBody) == 0 {
-		return nil, fmt.Errorf("empty response body")
+	if err := r.readBody(); err != nil {
+		return nil, err
 	}
 	r.status200 = new(structtags.XmlTagModel)
-	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
+	if err := nooaclient.UnmarshalResponse(r.resp, r.codec, r.status200); err != nil {
 		return nil, err
 	}
 	return r.status200, nil
 }
 
 // GETYamlResponse is the response for the GETYaml operation.
+// Call Close() when done to release the response body.
 type GETYamlResponse struct {
-	StatusCode int
-	RawBody    []byte
-	httpc      *httpc
+	resp     *http.Response
+	codec    map[string]nooaclient.Codec
+	bodyOnce sync.Once
 	status200 *structtags.YamlTagModel
+}
+
+// Close releases the response body. Always call when done.
+func (r *GETYamlResponse) Close() error {
+	if r.resp != nil {
+		return r.resp.Body.Close()
+	}
+	return nil
+}
+
+// Body returns an io.ReadCloser for the response body.
+// After the body is read (e.g. via StatusOk()), a new reader over the cached data is returned.
+func (r *GETYamlResponse) Body() io.ReadCloser {
+	if r.resp != nil {
+		return r.resp.Body
+	}
+	return nil
+}
+
+// readBody reads the response body once and replaces resp.Body with a cached reader
+// so subsequent reads (Body(), further Status* calls) can reuse the data.
+func (r *GETYamlResponse) readBody() error {
+	var err error
+	r.bodyOnce.Do(func() {
+		data, readErr := io.ReadAll(r.resp.Body)
+		if readErr != nil {
+			err = readErr
+			return
+		}
+		r.resp.Body = io.NopCloser(bytes.NewReader(data))
+	})
+	return err
+}
+
+// StatusCode returns the HTTP status code of the response.
+func (r *GETYamlResponse) StatusCode() int {
+	if r.resp != nil {
+		return r.resp.StatusCode
+	}
+	return 0
 }
 
 // StatusOk returns the unmarshaled response body for status 200.
@@ -286,14 +423,14 @@ func (r *GETYamlResponse) StatusOk() (*structtags.YamlTagModel, error) {
 	if r.status200 != nil {
 		return r.status200, nil
 	}
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	if r.StatusCode() != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode())
 	}
-	if r.RawBody == nil || len(r.RawBody) == 0 {
-		return nil, fmt.Errorf("empty response body")
+	if err := r.readBody(); err != nil {
+		return nil, err
 	}
 	r.status200 = new(structtags.YamlTagModel)
-	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
+	if err := nooaclient.UnmarshalResponse(r.resp, r.codec, r.status200); err != nil {
 		return nil, err
 	}
 	return r.status200, nil

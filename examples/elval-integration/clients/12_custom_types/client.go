@@ -7,9 +7,10 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"bytes"
 	"fmt"
 	"io"
-	"bytes"
+	"sync"
 	"encoding/json"
 	nooaclient "github.com/arkannsk/nooa/client"
 	customtypes "github.com/arkannsk/nooa/examples/models/12_custom_types"
@@ -92,16 +93,9 @@ func (c *V1) POSTAliases(ctx context.Context, input *customtypes.WithAliases) (*
 	if err != nil {
 		return nil, fmt.Errorf("execute request: %w", err)
 	}
-	defer httpResp.Body.Close()
-
-	rawBody, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response body: %w", err)
-	}
 	return &POSTAliasesResponse{
-		StatusCode: httpResp.StatusCode,
-		RawBody:    rawBody,
-		httpc:      c.base,
+		resp:  httpResp,
+		codec: c.base.Codec,
 	}, nil
 }
 
@@ -131,16 +125,9 @@ func (c *V1) POSTCustomreader(ctx context.Context, input *customtypes.WithCustom
 	if err != nil {
 		return nil, fmt.Errorf("execute request: %w", err)
 	}
-	defer httpResp.Body.Close()
-
-	rawBody, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response body: %w", err)
-	}
 	return &POSTCustomreaderResponse{
-		StatusCode: httpResp.StatusCode,
-		RawBody:    rawBody,
-		httpc:      c.base,
+		resp:  httpResp,
+		codec: c.base.Codec,
 	}, nil
 }
 
@@ -161,25 +148,59 @@ func (c *V1) GETEmbed(ctx context.Context, input *customtypes.WithEmbed) (*GETEm
 	if err != nil {
 		return nil, fmt.Errorf("execute request: %w", err)
 	}
-	defer httpResp.Body.Close()
-
-	rawBody, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response body: %w", err)
-	}
 	return &GETEmbedResponse{
-		StatusCode: httpResp.StatusCode,
-		RawBody:    rawBody,
-		httpc:      c.base,
+		resp:  httpResp,
+		codec: c.base.Codec,
 	}, nil
 }
 
 // POSTAliasesResponse is the response for the POSTAliases operation.
+// Call Close() when done to release the response body.
 type POSTAliasesResponse struct {
-	StatusCode int
-	RawBody    []byte
-	httpc      *httpc
+	resp     *http.Response
+	codec    map[string]nooaclient.Codec
+	bodyOnce sync.Once
 	status200 *customtypes.WithAliases
+}
+
+// Close releases the response body. Always call when done.
+func (r *POSTAliasesResponse) Close() error {
+	if r.resp != nil {
+		return r.resp.Body.Close()
+	}
+	return nil
+}
+
+// Body returns an io.ReadCloser for the response body.
+// After the body is read (e.g. via StatusOk()), a new reader over the cached data is returned.
+func (r *POSTAliasesResponse) Body() io.ReadCloser {
+	if r.resp != nil {
+		return r.resp.Body
+	}
+	return nil
+}
+
+// readBody reads the response body once and replaces resp.Body with a cached reader
+// so subsequent reads (Body(), further Status* calls) can reuse the data.
+func (r *POSTAliasesResponse) readBody() error {
+	var err error
+	r.bodyOnce.Do(func() {
+		data, readErr := io.ReadAll(r.resp.Body)
+		if readErr != nil {
+			err = readErr
+			return
+		}
+		r.resp.Body = io.NopCloser(bytes.NewReader(data))
+	})
+	return err
+}
+
+// StatusCode returns the HTTP status code of the response.
+func (r *POSTAliasesResponse) StatusCode() int {
+	if r.resp != nil {
+		return r.resp.StatusCode
+	}
+	return 0
 }
 
 // StatusOk returns the unmarshaled response body for status 200.
@@ -187,25 +208,66 @@ func (r *POSTAliasesResponse) StatusOk() (*customtypes.WithAliases, error) {
 	if r.status200 != nil {
 		return r.status200, nil
 	}
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	if r.StatusCode() != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode())
 	}
-	if r.RawBody == nil || len(r.RawBody) == 0 {
-		return nil, fmt.Errorf("empty response body")
+	if err := r.readBody(); err != nil {
+		return nil, err
 	}
 	r.status200 = new(customtypes.WithAliases)
-	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
+	if err := nooaclient.UnmarshalResponse(r.resp, r.codec, r.status200); err != nil {
 		return nil, err
 	}
 	return r.status200, nil
 }
 
 // POSTCustomreaderResponse is the response for the POSTCustomreader operation.
+// Call Close() when done to release the response body.
 type POSTCustomreaderResponse struct {
-	StatusCode int
-	RawBody    []byte
-	httpc      *httpc
+	resp     *http.Response
+	codec    map[string]nooaclient.Codec
+	bodyOnce sync.Once
 	status200 *customtypes.WithCustomReader
+}
+
+// Close releases the response body. Always call when done.
+func (r *POSTCustomreaderResponse) Close() error {
+	if r.resp != nil {
+		return r.resp.Body.Close()
+	}
+	return nil
+}
+
+// Body returns an io.ReadCloser for the response body.
+// After the body is read (e.g. via StatusOk()), a new reader over the cached data is returned.
+func (r *POSTCustomreaderResponse) Body() io.ReadCloser {
+	if r.resp != nil {
+		return r.resp.Body
+	}
+	return nil
+}
+
+// readBody reads the response body once and replaces resp.Body with a cached reader
+// so subsequent reads (Body(), further Status* calls) can reuse the data.
+func (r *POSTCustomreaderResponse) readBody() error {
+	var err error
+	r.bodyOnce.Do(func() {
+		data, readErr := io.ReadAll(r.resp.Body)
+		if readErr != nil {
+			err = readErr
+			return
+		}
+		r.resp.Body = io.NopCloser(bytes.NewReader(data))
+	})
+	return err
+}
+
+// StatusCode returns the HTTP status code of the response.
+func (r *POSTCustomreaderResponse) StatusCode() int {
+	if r.resp != nil {
+		return r.resp.StatusCode
+	}
+	return 0
 }
 
 // StatusOk returns the unmarshaled response body for status 200.
@@ -213,25 +275,66 @@ func (r *POSTCustomreaderResponse) StatusOk() (*customtypes.WithCustomReader, er
 	if r.status200 != nil {
 		return r.status200, nil
 	}
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	if r.StatusCode() != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode())
 	}
-	if r.RawBody == nil || len(r.RawBody) == 0 {
-		return nil, fmt.Errorf("empty response body")
+	if err := r.readBody(); err != nil {
+		return nil, err
 	}
 	r.status200 = new(customtypes.WithCustomReader)
-	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
+	if err := nooaclient.UnmarshalResponse(r.resp, r.codec, r.status200); err != nil {
 		return nil, err
 	}
 	return r.status200, nil
 }
 
 // GETEmbedResponse is the response for the GETEmbed operation.
+// Call Close() when done to release the response body.
 type GETEmbedResponse struct {
-	StatusCode int
-	RawBody    []byte
-	httpc      *httpc
+	resp     *http.Response
+	codec    map[string]nooaclient.Codec
+	bodyOnce sync.Once
 	status200 *customtypes.WithEmbed
+}
+
+// Close releases the response body. Always call when done.
+func (r *GETEmbedResponse) Close() error {
+	if r.resp != nil {
+		return r.resp.Body.Close()
+	}
+	return nil
+}
+
+// Body returns an io.ReadCloser for the response body.
+// After the body is read (e.g. via StatusOk()), a new reader over the cached data is returned.
+func (r *GETEmbedResponse) Body() io.ReadCloser {
+	if r.resp != nil {
+		return r.resp.Body
+	}
+	return nil
+}
+
+// readBody reads the response body once and replaces resp.Body with a cached reader
+// so subsequent reads (Body(), further Status* calls) can reuse the data.
+func (r *GETEmbedResponse) readBody() error {
+	var err error
+	r.bodyOnce.Do(func() {
+		data, readErr := io.ReadAll(r.resp.Body)
+		if readErr != nil {
+			err = readErr
+			return
+		}
+		r.resp.Body = io.NopCloser(bytes.NewReader(data))
+	})
+	return err
+}
+
+// StatusCode returns the HTTP status code of the response.
+func (r *GETEmbedResponse) StatusCode() int {
+	if r.resp != nil {
+		return r.resp.StatusCode
+	}
+	return 0
 }
 
 // StatusOk returns the unmarshaled response body for status 200.
@@ -239,14 +342,14 @@ func (r *GETEmbedResponse) StatusOk() (*customtypes.WithEmbed, error) {
 	if r.status200 != nil {
 		return r.status200, nil
 	}
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	if r.StatusCode() != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode())
 	}
-	if r.RawBody == nil || len(r.RawBody) == 0 {
-		return nil, fmt.Errorf("empty response body")
+	if err := r.readBody(); err != nil {
+		return nil, err
 	}
 	r.status200 = new(customtypes.WithEmbed)
-	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
+	if err := nooaclient.UnmarshalResponse(r.resp, r.codec, r.status200); err != nil {
 		return nil, err
 	}
 	return r.status200, nil

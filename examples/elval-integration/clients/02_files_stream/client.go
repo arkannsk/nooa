@@ -7,9 +7,10 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"bytes"
 	"fmt"
 	"io"
-	"bytes"
+	"sync"
 	"encoding/json"
 	nooaclient "github.com/arkannsk/nooa/client"
 	filesstream "github.com/arkannsk/nooa/examples/models/02_files_stream"
@@ -92,16 +93,9 @@ func (c *V1) POSTCustom(ctx context.Context, input *filesstream.CustomWithAnnota
 	if err != nil {
 		return nil, fmt.Errorf("execute request: %w", err)
 	}
-	defer httpResp.Body.Close()
-
-	rawBody, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response body: %w", err)
-	}
 	return &POSTCustomResponse{
-		StatusCode: httpResp.StatusCode,
-		RawBody:    rawBody,
-		httpc:      c.base,
+		resp:  httpResp,
+		codec: c.base.Codec,
 	}, nil
 }
 
@@ -131,16 +125,9 @@ func (c *V1) POSTMixed(ctx context.Context, input *filesstream.MixedRequest) (*P
 	if err != nil {
 		return nil, fmt.Errorf("execute request: %w", err)
 	}
-	defer httpResp.Body.Close()
-
-	rawBody, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response body: %w", err)
-	}
 	return &POSTMixedResponse{
-		StatusCode: httpResp.StatusCode,
-		RawBody:    rawBody,
-		httpc:      c.base,
+		resp:  httpResp,
+		codec: c.base.Codec,
 	}, nil
 }
 
@@ -170,25 +157,59 @@ func (c *V1) POSTStandard(ctx context.Context, input *filesstream.StandardFileTy
 	if err != nil {
 		return nil, fmt.Errorf("execute request: %w", err)
 	}
-	defer httpResp.Body.Close()
-
-	rawBody, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response body: %w", err)
-	}
 	return &POSTStandardResponse{
-		StatusCode: httpResp.StatusCode,
-		RawBody:    rawBody,
-		httpc:      c.base,
+		resp:  httpResp,
+		codec: c.base.Codec,
 	}, nil
 }
 
 // POSTCustomResponse is the response for the POSTCustom operation.
+// Call Close() when done to release the response body.
 type POSTCustomResponse struct {
-	StatusCode int
-	RawBody    []byte
-	httpc      *httpc
+	resp     *http.Response
+	codec    map[string]nooaclient.Codec
+	bodyOnce sync.Once
 	status201 *filesstream.CustomWithAnnotations
+}
+
+// Close releases the response body. Always call when done.
+func (r *POSTCustomResponse) Close() error {
+	if r.resp != nil {
+		return r.resp.Body.Close()
+	}
+	return nil
+}
+
+// Body returns an io.ReadCloser for the response body.
+// After the body is read (e.g. via StatusOk()), a new reader over the cached data is returned.
+func (r *POSTCustomResponse) Body() io.ReadCloser {
+	if r.resp != nil {
+		return r.resp.Body
+	}
+	return nil
+}
+
+// readBody reads the response body once and replaces resp.Body with a cached reader
+// so subsequent reads (Body(), further Status* calls) can reuse the data.
+func (r *POSTCustomResponse) readBody() error {
+	var err error
+	r.bodyOnce.Do(func() {
+		data, readErr := io.ReadAll(r.resp.Body)
+		if readErr != nil {
+			err = readErr
+			return
+		}
+		r.resp.Body = io.NopCloser(bytes.NewReader(data))
+	})
+	return err
+}
+
+// StatusCode returns the HTTP status code of the response.
+func (r *POSTCustomResponse) StatusCode() int {
+	if r.resp != nil {
+		return r.resp.StatusCode
+	}
+	return 0
 }
 
 // StatusCreated returns the unmarshaled response body for status 201.
@@ -196,25 +217,66 @@ func (r *POSTCustomResponse) StatusCreated() (*filesstream.CustomWithAnnotations
 	if r.status201 != nil {
 		return r.status201, nil
 	}
-	if r.StatusCode != 201 {
-		return nil, fmt.Errorf("expected status 201, got %d", r.StatusCode)
+	if r.StatusCode() != 201 {
+		return nil, fmt.Errorf("expected status 201, got %d", r.StatusCode())
 	}
-	if r.RawBody == nil || len(r.RawBody) == 0 {
-		return nil, fmt.Errorf("empty response body")
+	if err := r.readBody(); err != nil {
+		return nil, err
 	}
 	r.status201 = new(filesstream.CustomWithAnnotations)
-	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status201); err != nil {
+	if err := nooaclient.UnmarshalResponse(r.resp, r.codec, r.status201); err != nil {
 		return nil, err
 	}
 	return r.status201, nil
 }
 
 // POSTMixedResponse is the response for the POSTMixed operation.
+// Call Close() when done to release the response body.
 type POSTMixedResponse struct {
-	StatusCode int
-	RawBody    []byte
-	httpc      *httpc
+	resp     *http.Response
+	codec    map[string]nooaclient.Codec
+	bodyOnce sync.Once
 	status201 *filesstream.MixedRequest
+}
+
+// Close releases the response body. Always call when done.
+func (r *POSTMixedResponse) Close() error {
+	if r.resp != nil {
+		return r.resp.Body.Close()
+	}
+	return nil
+}
+
+// Body returns an io.ReadCloser for the response body.
+// After the body is read (e.g. via StatusOk()), a new reader over the cached data is returned.
+func (r *POSTMixedResponse) Body() io.ReadCloser {
+	if r.resp != nil {
+		return r.resp.Body
+	}
+	return nil
+}
+
+// readBody reads the response body once and replaces resp.Body with a cached reader
+// so subsequent reads (Body(), further Status* calls) can reuse the data.
+func (r *POSTMixedResponse) readBody() error {
+	var err error
+	r.bodyOnce.Do(func() {
+		data, readErr := io.ReadAll(r.resp.Body)
+		if readErr != nil {
+			err = readErr
+			return
+		}
+		r.resp.Body = io.NopCloser(bytes.NewReader(data))
+	})
+	return err
+}
+
+// StatusCode returns the HTTP status code of the response.
+func (r *POSTMixedResponse) StatusCode() int {
+	if r.resp != nil {
+		return r.resp.StatusCode
+	}
+	return 0
 }
 
 // StatusCreated returns the unmarshaled response body for status 201.
@@ -222,25 +284,66 @@ func (r *POSTMixedResponse) StatusCreated() (*filesstream.MixedRequest, error) {
 	if r.status201 != nil {
 		return r.status201, nil
 	}
-	if r.StatusCode != 201 {
-		return nil, fmt.Errorf("expected status 201, got %d", r.StatusCode)
+	if r.StatusCode() != 201 {
+		return nil, fmt.Errorf("expected status 201, got %d", r.StatusCode())
 	}
-	if r.RawBody == nil || len(r.RawBody) == 0 {
-		return nil, fmt.Errorf("empty response body")
+	if err := r.readBody(); err != nil {
+		return nil, err
 	}
 	r.status201 = new(filesstream.MixedRequest)
-	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status201); err != nil {
+	if err := nooaclient.UnmarshalResponse(r.resp, r.codec, r.status201); err != nil {
 		return nil, err
 	}
 	return r.status201, nil
 }
 
 // POSTStandardResponse is the response for the POSTStandard operation.
+// Call Close() when done to release the response body.
 type POSTStandardResponse struct {
-	StatusCode int
-	RawBody    []byte
-	httpc      *httpc
+	resp     *http.Response
+	codec    map[string]nooaclient.Codec
+	bodyOnce sync.Once
 	status201 *filesstream.StandardFileTypes
+}
+
+// Close releases the response body. Always call when done.
+func (r *POSTStandardResponse) Close() error {
+	if r.resp != nil {
+		return r.resp.Body.Close()
+	}
+	return nil
+}
+
+// Body returns an io.ReadCloser for the response body.
+// After the body is read (e.g. via StatusOk()), a new reader over the cached data is returned.
+func (r *POSTStandardResponse) Body() io.ReadCloser {
+	if r.resp != nil {
+		return r.resp.Body
+	}
+	return nil
+}
+
+// readBody reads the response body once and replaces resp.Body with a cached reader
+// so subsequent reads (Body(), further Status* calls) can reuse the data.
+func (r *POSTStandardResponse) readBody() error {
+	var err error
+	r.bodyOnce.Do(func() {
+		data, readErr := io.ReadAll(r.resp.Body)
+		if readErr != nil {
+			err = readErr
+			return
+		}
+		r.resp.Body = io.NopCloser(bytes.NewReader(data))
+	})
+	return err
+}
+
+// StatusCode returns the HTTP status code of the response.
+func (r *POSTStandardResponse) StatusCode() int {
+	if r.resp != nil {
+		return r.resp.StatusCode
+	}
+	return 0
 }
 
 // StatusCreated returns the unmarshaled response body for status 201.
@@ -248,14 +351,14 @@ func (r *POSTStandardResponse) StatusCreated() (*filesstream.StandardFileTypes, 
 	if r.status201 != nil {
 		return r.status201, nil
 	}
-	if r.StatusCode != 201 {
-		return nil, fmt.Errorf("expected status 201, got %d", r.StatusCode)
+	if r.StatusCode() != 201 {
+		return nil, fmt.Errorf("expected status 201, got %d", r.StatusCode())
 	}
-	if r.RawBody == nil || len(r.RawBody) == 0 {
-		return nil, fmt.Errorf("empty response body")
+	if err := r.readBody(); err != nil {
+		return nil, err
 	}
 	r.status201 = new(filesstream.StandardFileTypes)
-	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status201); err != nil {
+	if err := nooaclient.UnmarshalResponse(r.resp, r.codec, r.status201); err != nil {
 		return nil, err
 	}
 	return r.status201, nil

@@ -7,8 +7,10 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"bytes"
 	"fmt"
 	"io"
+	"sync"
 	nooaclient "github.com/arkannsk/nooa/client"
 	slicemaps "github.com/arkannsk/nooa/examples/models/04_slice_maps"
 )
@@ -81,16 +83,9 @@ func (c *V1) GETArrays(ctx context.Context, input *slicemaps.ArrayFixed) (*GETAr
 	if err != nil {
 		return nil, fmt.Errorf("execute request: %w", err)
 	}
-	defer httpResp.Body.Close()
-
-	rawBody, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response body: %w", err)
-	}
 	return &GETArraysResponse{
-		StatusCode: httpResp.StatusCode,
-		RawBody:    rawBody,
-		httpc:      c.base,
+		resp:  httpResp,
+		codec: c.base.Codec,
 	}, nil
 }
 
@@ -111,16 +106,9 @@ func (c *V1) GETMaps(ctx context.Context, input *slicemaps.MapVariations) (*GETM
 	if err != nil {
 		return nil, fmt.Errorf("execute request: %w", err)
 	}
-	defer httpResp.Body.Close()
-
-	rawBody, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response body: %w", err)
-	}
 	return &GETMapsResponse{
-		StatusCode: httpResp.StatusCode,
-		RawBody:    rawBody,
-		httpc:      c.base,
+		resp:  httpResp,
+		codec: c.base.Codec,
 	}, nil
 }
 
@@ -141,25 +129,59 @@ func (c *V1) GETSlices(ctx context.Context, input *slicemaps.SliceVariations) (*
 	if err != nil {
 		return nil, fmt.Errorf("execute request: %w", err)
 	}
-	defer httpResp.Body.Close()
-
-	rawBody, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response body: %w", err)
-	}
 	return &GETSlicesResponse{
-		StatusCode: httpResp.StatusCode,
-		RawBody:    rawBody,
-		httpc:      c.base,
+		resp:  httpResp,
+		codec: c.base.Codec,
 	}, nil
 }
 
 // GETArraysResponse is the response for the GETArrays operation.
+// Call Close() when done to release the response body.
 type GETArraysResponse struct {
-	StatusCode int
-	RawBody    []byte
-	httpc      *httpc
+	resp     *http.Response
+	codec    map[string]nooaclient.Codec
+	bodyOnce sync.Once
 	status200 *slicemaps.ArrayFixed
+}
+
+// Close releases the response body. Always call when done.
+func (r *GETArraysResponse) Close() error {
+	if r.resp != nil {
+		return r.resp.Body.Close()
+	}
+	return nil
+}
+
+// Body returns an io.ReadCloser for the response body.
+// After the body is read (e.g. via StatusOk()), a new reader over the cached data is returned.
+func (r *GETArraysResponse) Body() io.ReadCloser {
+	if r.resp != nil {
+		return r.resp.Body
+	}
+	return nil
+}
+
+// readBody reads the response body once and replaces resp.Body with a cached reader
+// so subsequent reads (Body(), further Status* calls) can reuse the data.
+func (r *GETArraysResponse) readBody() error {
+	var err error
+	r.bodyOnce.Do(func() {
+		data, readErr := io.ReadAll(r.resp.Body)
+		if readErr != nil {
+			err = readErr
+			return
+		}
+		r.resp.Body = io.NopCloser(bytes.NewReader(data))
+	})
+	return err
+}
+
+// StatusCode returns the HTTP status code of the response.
+func (r *GETArraysResponse) StatusCode() int {
+	if r.resp != nil {
+		return r.resp.StatusCode
+	}
+	return 0
 }
 
 // StatusOk returns the unmarshaled response body for status 200.
@@ -167,25 +189,66 @@ func (r *GETArraysResponse) StatusOk() (*slicemaps.ArrayFixed, error) {
 	if r.status200 != nil {
 		return r.status200, nil
 	}
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	if r.StatusCode() != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode())
 	}
-	if r.RawBody == nil || len(r.RawBody) == 0 {
-		return nil, fmt.Errorf("empty response body")
+	if err := r.readBody(); err != nil {
+		return nil, err
 	}
 	r.status200 = new(slicemaps.ArrayFixed)
-	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
+	if err := nooaclient.UnmarshalResponse(r.resp, r.codec, r.status200); err != nil {
 		return nil, err
 	}
 	return r.status200, nil
 }
 
 // GETMapsResponse is the response for the GETMaps operation.
+// Call Close() when done to release the response body.
 type GETMapsResponse struct {
-	StatusCode int
-	RawBody    []byte
-	httpc      *httpc
+	resp     *http.Response
+	codec    map[string]nooaclient.Codec
+	bodyOnce sync.Once
 	status200 *slicemaps.MapVariations
+}
+
+// Close releases the response body. Always call when done.
+func (r *GETMapsResponse) Close() error {
+	if r.resp != nil {
+		return r.resp.Body.Close()
+	}
+	return nil
+}
+
+// Body returns an io.ReadCloser for the response body.
+// After the body is read (e.g. via StatusOk()), a new reader over the cached data is returned.
+func (r *GETMapsResponse) Body() io.ReadCloser {
+	if r.resp != nil {
+		return r.resp.Body
+	}
+	return nil
+}
+
+// readBody reads the response body once and replaces resp.Body with a cached reader
+// so subsequent reads (Body(), further Status* calls) can reuse the data.
+func (r *GETMapsResponse) readBody() error {
+	var err error
+	r.bodyOnce.Do(func() {
+		data, readErr := io.ReadAll(r.resp.Body)
+		if readErr != nil {
+			err = readErr
+			return
+		}
+		r.resp.Body = io.NopCloser(bytes.NewReader(data))
+	})
+	return err
+}
+
+// StatusCode returns the HTTP status code of the response.
+func (r *GETMapsResponse) StatusCode() int {
+	if r.resp != nil {
+		return r.resp.StatusCode
+	}
+	return 0
 }
 
 // StatusOk returns the unmarshaled response body for status 200.
@@ -193,25 +256,66 @@ func (r *GETMapsResponse) StatusOk() (*slicemaps.MapVariations, error) {
 	if r.status200 != nil {
 		return r.status200, nil
 	}
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	if r.StatusCode() != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode())
 	}
-	if r.RawBody == nil || len(r.RawBody) == 0 {
-		return nil, fmt.Errorf("empty response body")
+	if err := r.readBody(); err != nil {
+		return nil, err
 	}
 	r.status200 = new(slicemaps.MapVariations)
-	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
+	if err := nooaclient.UnmarshalResponse(r.resp, r.codec, r.status200); err != nil {
 		return nil, err
 	}
 	return r.status200, nil
 }
 
 // GETSlicesResponse is the response for the GETSlices operation.
+// Call Close() when done to release the response body.
 type GETSlicesResponse struct {
-	StatusCode int
-	RawBody    []byte
-	httpc      *httpc
+	resp     *http.Response
+	codec    map[string]nooaclient.Codec
+	bodyOnce sync.Once
 	status200 *slicemaps.SliceVariations
+}
+
+// Close releases the response body. Always call when done.
+func (r *GETSlicesResponse) Close() error {
+	if r.resp != nil {
+		return r.resp.Body.Close()
+	}
+	return nil
+}
+
+// Body returns an io.ReadCloser for the response body.
+// After the body is read (e.g. via StatusOk()), a new reader over the cached data is returned.
+func (r *GETSlicesResponse) Body() io.ReadCloser {
+	if r.resp != nil {
+		return r.resp.Body
+	}
+	return nil
+}
+
+// readBody reads the response body once and replaces resp.Body with a cached reader
+// so subsequent reads (Body(), further Status* calls) can reuse the data.
+func (r *GETSlicesResponse) readBody() error {
+	var err error
+	r.bodyOnce.Do(func() {
+		data, readErr := io.ReadAll(r.resp.Body)
+		if readErr != nil {
+			err = readErr
+			return
+		}
+		r.resp.Body = io.NopCloser(bytes.NewReader(data))
+	})
+	return err
+}
+
+// StatusCode returns the HTTP status code of the response.
+func (r *GETSlicesResponse) StatusCode() int {
+	if r.resp != nil {
+		return r.resp.StatusCode
+	}
+	return 0
 }
 
 // StatusOk returns the unmarshaled response body for status 200.
@@ -219,14 +323,14 @@ func (r *GETSlicesResponse) StatusOk() (*slicemaps.SliceVariations, error) {
 	if r.status200 != nil {
 		return r.status200, nil
 	}
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	if r.StatusCode() != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode())
 	}
-	if r.RawBody == nil || len(r.RawBody) == 0 {
-		return nil, fmt.Errorf("empty response body")
+	if err := r.readBody(); err != nil {
+		return nil, err
 	}
 	r.status200 = new(slicemaps.SliceVariations)
-	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
+	if err := nooaclient.UnmarshalResponse(r.resp, r.codec, r.status200); err != nil {
 		return nil, err
 	}
 	return r.status200, nil

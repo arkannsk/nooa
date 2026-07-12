@@ -7,8 +7,10 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"bytes"
 	"fmt"
 	"io"
+	"sync"
 	nooaclient "github.com/arkannsk/nooa/client"
 	edgecases "github.com/arkannsk/nooa/examples/models/11_edge_cases"
 )
@@ -81,16 +83,9 @@ func (c *V1) GETCircular(ctx context.Context, input *edgecases.CircularRefA) (*G
 	if err != nil {
 		return nil, fmt.Errorf("execute request: %w", err)
 	}
-	defer httpResp.Body.Close()
-
-	rawBody, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response body: %w", err)
-	}
 	return &GETCircularResponse{
-		StatusCode: httpResp.StatusCode,
-		RawBody:    rawBody,
-		httpc:      c.base,
+		resp:  httpResp,
+		codec: c.base.Codec,
 	}, nil
 }
 
@@ -111,16 +106,9 @@ func (c *V1) GETEmpty(ctx context.Context, input *edgecases.EmptyStruct) (*GETEm
 	if err != nil {
 		return nil, fmt.Errorf("execute request: %w", err)
 	}
-	defer httpResp.Body.Close()
-
-	rawBody, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response body: %w", err)
-	}
 	return &GETEmptyResponse{
-		StatusCode: httpResp.StatusCode,
-		RawBody:    rawBody,
-		httpc:      c.base,
+		resp:  httpResp,
+		codec: c.base.Codec,
 	}, nil
 }
 
@@ -141,16 +129,9 @@ func (c *V1) GETOneof(ctx context.Context, input *edgecases.WithInterface) (*GET
 	if err != nil {
 		return nil, fmt.Errorf("execute request: %w", err)
 	}
-	defer httpResp.Body.Close()
-
-	rawBody, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response body: %w", err)
-	}
 	return &GETOneofResponse{
-		StatusCode: httpResp.StatusCode,
-		RawBody:    rawBody,
-		httpc:      c.base,
+		resp:  httpResp,
+		codec: c.base.Codec,
 	}, nil
 }
 
@@ -171,16 +152,9 @@ func (c *V1) GETPointerchain(ctx context.Context, input *edgecases.PointerChain)
 	if err != nil {
 		return nil, fmt.Errorf("execute request: %w", err)
 	}
-	defer httpResp.Body.Close()
-
-	rawBody, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response body: %w", err)
-	}
 	return &GETPointerchainResponse{
-		StatusCode: httpResp.StatusCode,
-		RawBody:    rawBody,
-		httpc:      c.base,
+		resp:  httpResp,
+		codec: c.base.Codec,
 	}, nil
 }
 
@@ -201,25 +175,59 @@ func (c *V1) GETUntypednil(ctx context.Context, input *edgecases.WithUntypedNil)
 	if err != nil {
 		return nil, fmt.Errorf("execute request: %w", err)
 	}
-	defer httpResp.Body.Close()
-
-	rawBody, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response body: %w", err)
-	}
 	return &GETUntypednilResponse{
-		StatusCode: httpResp.StatusCode,
-		RawBody:    rawBody,
-		httpc:      c.base,
+		resp:  httpResp,
+		codec: c.base.Codec,
 	}, nil
 }
 
 // GETCircularResponse is the response for the GETCircular operation.
+// Call Close() when done to release the response body.
 type GETCircularResponse struct {
-	StatusCode int
-	RawBody    []byte
-	httpc      *httpc
+	resp     *http.Response
+	codec    map[string]nooaclient.Codec
+	bodyOnce sync.Once
 	status200 *edgecases.CircularRefA
+}
+
+// Close releases the response body. Always call when done.
+func (r *GETCircularResponse) Close() error {
+	if r.resp != nil {
+		return r.resp.Body.Close()
+	}
+	return nil
+}
+
+// Body returns an io.ReadCloser for the response body.
+// After the body is read (e.g. via StatusOk()), a new reader over the cached data is returned.
+func (r *GETCircularResponse) Body() io.ReadCloser {
+	if r.resp != nil {
+		return r.resp.Body
+	}
+	return nil
+}
+
+// readBody reads the response body once and replaces resp.Body with a cached reader
+// so subsequent reads (Body(), further Status* calls) can reuse the data.
+func (r *GETCircularResponse) readBody() error {
+	var err error
+	r.bodyOnce.Do(func() {
+		data, readErr := io.ReadAll(r.resp.Body)
+		if readErr != nil {
+			err = readErr
+			return
+		}
+		r.resp.Body = io.NopCloser(bytes.NewReader(data))
+	})
+	return err
+}
+
+// StatusCode returns the HTTP status code of the response.
+func (r *GETCircularResponse) StatusCode() int {
+	if r.resp != nil {
+		return r.resp.StatusCode
+	}
+	return 0
 }
 
 // StatusOk returns the unmarshaled response body for status 200.
@@ -227,25 +235,66 @@ func (r *GETCircularResponse) StatusOk() (*edgecases.CircularRefA, error) {
 	if r.status200 != nil {
 		return r.status200, nil
 	}
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	if r.StatusCode() != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode())
 	}
-	if r.RawBody == nil || len(r.RawBody) == 0 {
-		return nil, fmt.Errorf("empty response body")
+	if err := r.readBody(); err != nil {
+		return nil, err
 	}
 	r.status200 = new(edgecases.CircularRefA)
-	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
+	if err := nooaclient.UnmarshalResponse(r.resp, r.codec, r.status200); err != nil {
 		return nil, err
 	}
 	return r.status200, nil
 }
 
 // GETEmptyResponse is the response for the GETEmpty operation.
+// Call Close() when done to release the response body.
 type GETEmptyResponse struct {
-	StatusCode int
-	RawBody    []byte
-	httpc      *httpc
+	resp     *http.Response
+	codec    map[string]nooaclient.Codec
+	bodyOnce sync.Once
 	status200 *edgecases.EmptyStruct
+}
+
+// Close releases the response body. Always call when done.
+func (r *GETEmptyResponse) Close() error {
+	if r.resp != nil {
+		return r.resp.Body.Close()
+	}
+	return nil
+}
+
+// Body returns an io.ReadCloser for the response body.
+// After the body is read (e.g. via StatusOk()), a new reader over the cached data is returned.
+func (r *GETEmptyResponse) Body() io.ReadCloser {
+	if r.resp != nil {
+		return r.resp.Body
+	}
+	return nil
+}
+
+// readBody reads the response body once and replaces resp.Body with a cached reader
+// so subsequent reads (Body(), further Status* calls) can reuse the data.
+func (r *GETEmptyResponse) readBody() error {
+	var err error
+	r.bodyOnce.Do(func() {
+		data, readErr := io.ReadAll(r.resp.Body)
+		if readErr != nil {
+			err = readErr
+			return
+		}
+		r.resp.Body = io.NopCloser(bytes.NewReader(data))
+	})
+	return err
+}
+
+// StatusCode returns the HTTP status code of the response.
+func (r *GETEmptyResponse) StatusCode() int {
+	if r.resp != nil {
+		return r.resp.StatusCode
+	}
+	return 0
 }
 
 // StatusOk returns the unmarshaled response body for status 200.
@@ -253,25 +302,66 @@ func (r *GETEmptyResponse) StatusOk() (*edgecases.EmptyStruct, error) {
 	if r.status200 != nil {
 		return r.status200, nil
 	}
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	if r.StatusCode() != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode())
 	}
-	if r.RawBody == nil || len(r.RawBody) == 0 {
-		return nil, fmt.Errorf("empty response body")
+	if err := r.readBody(); err != nil {
+		return nil, err
 	}
 	r.status200 = new(edgecases.EmptyStruct)
-	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
+	if err := nooaclient.UnmarshalResponse(r.resp, r.codec, r.status200); err != nil {
 		return nil, err
 	}
 	return r.status200, nil
 }
 
 // GETOneofResponse is the response for the GETOneof operation.
+// Call Close() when done to release the response body.
 type GETOneofResponse struct {
-	StatusCode int
-	RawBody    []byte
-	httpc      *httpc
+	resp     *http.Response
+	codec    map[string]nooaclient.Codec
+	bodyOnce sync.Once
 	status200 *edgecases.WithInterface
+}
+
+// Close releases the response body. Always call when done.
+func (r *GETOneofResponse) Close() error {
+	if r.resp != nil {
+		return r.resp.Body.Close()
+	}
+	return nil
+}
+
+// Body returns an io.ReadCloser for the response body.
+// After the body is read (e.g. via StatusOk()), a new reader over the cached data is returned.
+func (r *GETOneofResponse) Body() io.ReadCloser {
+	if r.resp != nil {
+		return r.resp.Body
+	}
+	return nil
+}
+
+// readBody reads the response body once and replaces resp.Body with a cached reader
+// so subsequent reads (Body(), further Status* calls) can reuse the data.
+func (r *GETOneofResponse) readBody() error {
+	var err error
+	r.bodyOnce.Do(func() {
+		data, readErr := io.ReadAll(r.resp.Body)
+		if readErr != nil {
+			err = readErr
+			return
+		}
+		r.resp.Body = io.NopCloser(bytes.NewReader(data))
+	})
+	return err
+}
+
+// StatusCode returns the HTTP status code of the response.
+func (r *GETOneofResponse) StatusCode() int {
+	if r.resp != nil {
+		return r.resp.StatusCode
+	}
+	return 0
 }
 
 // StatusOk returns the unmarshaled response body for status 200.
@@ -279,25 +369,66 @@ func (r *GETOneofResponse) StatusOk() (*edgecases.WithInterface, error) {
 	if r.status200 != nil {
 		return r.status200, nil
 	}
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	if r.StatusCode() != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode())
 	}
-	if r.RawBody == nil || len(r.RawBody) == 0 {
-		return nil, fmt.Errorf("empty response body")
+	if err := r.readBody(); err != nil {
+		return nil, err
 	}
 	r.status200 = new(edgecases.WithInterface)
-	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
+	if err := nooaclient.UnmarshalResponse(r.resp, r.codec, r.status200); err != nil {
 		return nil, err
 	}
 	return r.status200, nil
 }
 
 // GETPointerchainResponse is the response for the GETPointerchain operation.
+// Call Close() when done to release the response body.
 type GETPointerchainResponse struct {
-	StatusCode int
-	RawBody    []byte
-	httpc      *httpc
+	resp     *http.Response
+	codec    map[string]nooaclient.Codec
+	bodyOnce sync.Once
 	status200 *edgecases.PointerChain
+}
+
+// Close releases the response body. Always call when done.
+func (r *GETPointerchainResponse) Close() error {
+	if r.resp != nil {
+		return r.resp.Body.Close()
+	}
+	return nil
+}
+
+// Body returns an io.ReadCloser for the response body.
+// After the body is read (e.g. via StatusOk()), a new reader over the cached data is returned.
+func (r *GETPointerchainResponse) Body() io.ReadCloser {
+	if r.resp != nil {
+		return r.resp.Body
+	}
+	return nil
+}
+
+// readBody reads the response body once and replaces resp.Body with a cached reader
+// so subsequent reads (Body(), further Status* calls) can reuse the data.
+func (r *GETPointerchainResponse) readBody() error {
+	var err error
+	r.bodyOnce.Do(func() {
+		data, readErr := io.ReadAll(r.resp.Body)
+		if readErr != nil {
+			err = readErr
+			return
+		}
+		r.resp.Body = io.NopCloser(bytes.NewReader(data))
+	})
+	return err
+}
+
+// StatusCode returns the HTTP status code of the response.
+func (r *GETPointerchainResponse) StatusCode() int {
+	if r.resp != nil {
+		return r.resp.StatusCode
+	}
+	return 0
 }
 
 // StatusOk returns the unmarshaled response body for status 200.
@@ -305,25 +436,66 @@ func (r *GETPointerchainResponse) StatusOk() (*edgecases.PointerChain, error) {
 	if r.status200 != nil {
 		return r.status200, nil
 	}
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	if r.StatusCode() != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode())
 	}
-	if r.RawBody == nil || len(r.RawBody) == 0 {
-		return nil, fmt.Errorf("empty response body")
+	if err := r.readBody(); err != nil {
+		return nil, err
 	}
 	r.status200 = new(edgecases.PointerChain)
-	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
+	if err := nooaclient.UnmarshalResponse(r.resp, r.codec, r.status200); err != nil {
 		return nil, err
 	}
 	return r.status200, nil
 }
 
 // GETUntypednilResponse is the response for the GETUntypednil operation.
+// Call Close() when done to release the response body.
 type GETUntypednilResponse struct {
-	StatusCode int
-	RawBody    []byte
-	httpc      *httpc
+	resp     *http.Response
+	codec    map[string]nooaclient.Codec
+	bodyOnce sync.Once
 	status200 *edgecases.WithUntypedNil
+}
+
+// Close releases the response body. Always call when done.
+func (r *GETUntypednilResponse) Close() error {
+	if r.resp != nil {
+		return r.resp.Body.Close()
+	}
+	return nil
+}
+
+// Body returns an io.ReadCloser for the response body.
+// After the body is read (e.g. via StatusOk()), a new reader over the cached data is returned.
+func (r *GETUntypednilResponse) Body() io.ReadCloser {
+	if r.resp != nil {
+		return r.resp.Body
+	}
+	return nil
+}
+
+// readBody reads the response body once and replaces resp.Body with a cached reader
+// so subsequent reads (Body(), further Status* calls) can reuse the data.
+func (r *GETUntypednilResponse) readBody() error {
+	var err error
+	r.bodyOnce.Do(func() {
+		data, readErr := io.ReadAll(r.resp.Body)
+		if readErr != nil {
+			err = readErr
+			return
+		}
+		r.resp.Body = io.NopCloser(bytes.NewReader(data))
+	})
+	return err
+}
+
+// StatusCode returns the HTTP status code of the response.
+func (r *GETUntypednilResponse) StatusCode() int {
+	if r.resp != nil {
+		return r.resp.StatusCode
+	}
+	return 0
 }
 
 // StatusOk returns the unmarshaled response body for status 200.
@@ -331,14 +503,14 @@ func (r *GETUntypednilResponse) StatusOk() (*edgecases.WithUntypedNil, error) {
 	if r.status200 != nil {
 		return r.status200, nil
 	}
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	if r.StatusCode() != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode())
 	}
-	if r.RawBody == nil || len(r.RawBody) == 0 {
-		return nil, fmt.Errorf("empty response body")
+	if err := r.readBody(); err != nil {
+		return nil, err
 	}
 	r.status200 = new(edgecases.WithUntypedNil)
-	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
+	if err := nooaclient.UnmarshalResponse(r.resp, r.codec, r.status200); err != nil {
 		return nil, err
 	}
 	return r.status200, nil

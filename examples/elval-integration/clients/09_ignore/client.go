@@ -7,8 +7,10 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"bytes"
 	"fmt"
 	"io"
+	"sync"
 	nooaclient "github.com/arkannsk/nooa/client"
 	ignore "github.com/arkannsk/nooa/examples/models/09_ignore"
 )
@@ -81,16 +83,9 @@ func (c *V1) GETIgnoredfield(ctx context.Context, input *ignore.WithIgnoredField
 	if err != nil {
 		return nil, fmt.Errorf("execute request: %w", err)
 	}
-	defer httpResp.Body.Close()
-
-	rawBody, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response body: %w", err)
-	}
 	return &GETIgnoredfieldResponse{
-		StatusCode: httpResp.StatusCode,
-		RawBody:    rawBody,
-		httpc:      c.base,
+		resp:  httpResp,
+		codec: c.base.Codec,
 	}, nil
 }
 
@@ -111,16 +106,9 @@ func (c *V1) GETOnlyignored(ctx context.Context, input *ignore.OnlyIgnoredFields
 	if err != nil {
 		return nil, fmt.Errorf("execute request: %w", err)
 	}
-	defer httpResp.Body.Close()
-
-	rawBody, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response body: %w", err)
-	}
 	return &GETOnlyignoredResponse{
-		StatusCode: httpResp.StatusCode,
-		RawBody:    rawBody,
-		httpc:      c.base,
+		resp:  httpResp,
+		codec: c.base.Codec,
 	}, nil
 }
 
@@ -141,25 +129,59 @@ func (c *V1) GETOverride(ctx context.Context, input *ignore.WithOverride) (*GETO
 	if err != nil {
 		return nil, fmt.Errorf("execute request: %w", err)
 	}
-	defer httpResp.Body.Close()
-
-	rawBody, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response body: %w", err)
-	}
 	return &GETOverrideResponse{
-		StatusCode: httpResp.StatusCode,
-		RawBody:    rawBody,
-		httpc:      c.base,
+		resp:  httpResp,
+		codec: c.base.Codec,
 	}, nil
 }
 
 // GETIgnoredfieldResponse is the response for the GETIgnoredfield operation.
+// Call Close() when done to release the response body.
 type GETIgnoredfieldResponse struct {
-	StatusCode int
-	RawBody    []byte
-	httpc      *httpc
+	resp     *http.Response
+	codec    map[string]nooaclient.Codec
+	bodyOnce sync.Once
 	status200 *ignore.WithIgnoredField
+}
+
+// Close releases the response body. Always call when done.
+func (r *GETIgnoredfieldResponse) Close() error {
+	if r.resp != nil {
+		return r.resp.Body.Close()
+	}
+	return nil
+}
+
+// Body returns an io.ReadCloser for the response body.
+// After the body is read (e.g. via StatusOk()), a new reader over the cached data is returned.
+func (r *GETIgnoredfieldResponse) Body() io.ReadCloser {
+	if r.resp != nil {
+		return r.resp.Body
+	}
+	return nil
+}
+
+// readBody reads the response body once and replaces resp.Body with a cached reader
+// so subsequent reads (Body(), further Status* calls) can reuse the data.
+func (r *GETIgnoredfieldResponse) readBody() error {
+	var err error
+	r.bodyOnce.Do(func() {
+		data, readErr := io.ReadAll(r.resp.Body)
+		if readErr != nil {
+			err = readErr
+			return
+		}
+		r.resp.Body = io.NopCloser(bytes.NewReader(data))
+	})
+	return err
+}
+
+// StatusCode returns the HTTP status code of the response.
+func (r *GETIgnoredfieldResponse) StatusCode() int {
+	if r.resp != nil {
+		return r.resp.StatusCode
+	}
+	return 0
 }
 
 // StatusOk returns the unmarshaled response body for status 200.
@@ -167,25 +189,66 @@ func (r *GETIgnoredfieldResponse) StatusOk() (*ignore.WithIgnoredField, error) {
 	if r.status200 != nil {
 		return r.status200, nil
 	}
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	if r.StatusCode() != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode())
 	}
-	if r.RawBody == nil || len(r.RawBody) == 0 {
-		return nil, fmt.Errorf("empty response body")
+	if err := r.readBody(); err != nil {
+		return nil, err
 	}
 	r.status200 = new(ignore.WithIgnoredField)
-	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
+	if err := nooaclient.UnmarshalResponse(r.resp, r.codec, r.status200); err != nil {
 		return nil, err
 	}
 	return r.status200, nil
 }
 
 // GETOnlyignoredResponse is the response for the GETOnlyignored operation.
+// Call Close() when done to release the response body.
 type GETOnlyignoredResponse struct {
-	StatusCode int
-	RawBody    []byte
-	httpc      *httpc
+	resp     *http.Response
+	codec    map[string]nooaclient.Codec
+	bodyOnce sync.Once
 	status200 *ignore.OnlyIgnoredFields
+}
+
+// Close releases the response body. Always call when done.
+func (r *GETOnlyignoredResponse) Close() error {
+	if r.resp != nil {
+		return r.resp.Body.Close()
+	}
+	return nil
+}
+
+// Body returns an io.ReadCloser for the response body.
+// After the body is read (e.g. via StatusOk()), a new reader over the cached data is returned.
+func (r *GETOnlyignoredResponse) Body() io.ReadCloser {
+	if r.resp != nil {
+		return r.resp.Body
+	}
+	return nil
+}
+
+// readBody reads the response body once and replaces resp.Body with a cached reader
+// so subsequent reads (Body(), further Status* calls) can reuse the data.
+func (r *GETOnlyignoredResponse) readBody() error {
+	var err error
+	r.bodyOnce.Do(func() {
+		data, readErr := io.ReadAll(r.resp.Body)
+		if readErr != nil {
+			err = readErr
+			return
+		}
+		r.resp.Body = io.NopCloser(bytes.NewReader(data))
+	})
+	return err
+}
+
+// StatusCode returns the HTTP status code of the response.
+func (r *GETOnlyignoredResponse) StatusCode() int {
+	if r.resp != nil {
+		return r.resp.StatusCode
+	}
+	return 0
 }
 
 // StatusOk returns the unmarshaled response body for status 200.
@@ -193,25 +256,66 @@ func (r *GETOnlyignoredResponse) StatusOk() (*ignore.OnlyIgnoredFields, error) {
 	if r.status200 != nil {
 		return r.status200, nil
 	}
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	if r.StatusCode() != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode())
 	}
-	if r.RawBody == nil || len(r.RawBody) == 0 {
-		return nil, fmt.Errorf("empty response body")
+	if err := r.readBody(); err != nil {
+		return nil, err
 	}
 	r.status200 = new(ignore.OnlyIgnoredFields)
-	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
+	if err := nooaclient.UnmarshalResponse(r.resp, r.codec, r.status200); err != nil {
 		return nil, err
 	}
 	return r.status200, nil
 }
 
 // GETOverrideResponse is the response for the GETOverride operation.
+// Call Close() when done to release the response body.
 type GETOverrideResponse struct {
-	StatusCode int
-	RawBody    []byte
-	httpc      *httpc
+	resp     *http.Response
+	codec    map[string]nooaclient.Codec
+	bodyOnce sync.Once
 	status200 *ignore.WithOverride
+}
+
+// Close releases the response body. Always call when done.
+func (r *GETOverrideResponse) Close() error {
+	if r.resp != nil {
+		return r.resp.Body.Close()
+	}
+	return nil
+}
+
+// Body returns an io.ReadCloser for the response body.
+// After the body is read (e.g. via StatusOk()), a new reader over the cached data is returned.
+func (r *GETOverrideResponse) Body() io.ReadCloser {
+	if r.resp != nil {
+		return r.resp.Body
+	}
+	return nil
+}
+
+// readBody reads the response body once and replaces resp.Body with a cached reader
+// so subsequent reads (Body(), further Status* calls) can reuse the data.
+func (r *GETOverrideResponse) readBody() error {
+	var err error
+	r.bodyOnce.Do(func() {
+		data, readErr := io.ReadAll(r.resp.Body)
+		if readErr != nil {
+			err = readErr
+			return
+		}
+		r.resp.Body = io.NopCloser(bytes.NewReader(data))
+	})
+	return err
+}
+
+// StatusCode returns the HTTP status code of the response.
+func (r *GETOverrideResponse) StatusCode() int {
+	if r.resp != nil {
+		return r.resp.StatusCode
+	}
+	return 0
 }
 
 // StatusOk returns the unmarshaled response body for status 200.
@@ -219,14 +323,14 @@ func (r *GETOverrideResponse) StatusOk() (*ignore.WithOverride, error) {
 	if r.status200 != nil {
 		return r.status200, nil
 	}
-	if r.StatusCode != 200 {
-		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode)
+	if r.StatusCode() != 200 {
+		return nil, fmt.Errorf("expected status 200, got %d", r.StatusCode())
 	}
-	if r.RawBody == nil || len(r.RawBody) == 0 {
-		return nil, fmt.Errorf("empty response body")
+	if err := r.readBody(); err != nil {
+		return nil, err
 	}
 	r.status200 = new(ignore.WithOverride)
-	if err := nooaclient.UnmarshalBody(r.RawBody, "", r.httpc.Codec, r.status200); err != nil {
+	if err := nooaclient.UnmarshalResponse(r.resp, r.codec, r.status200); err != nil {
 		return nil, err
 	}
 	return r.status200, nil
