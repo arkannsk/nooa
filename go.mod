@@ -3,7 +3,7 @@ module github.com/arkannsk/nooa
 go 1.26.4
 
 require (
-	github.com/arkannsk/elval v0.0.0-20260708182343-dc41ccd9be17
+	github.com/arkannsk/elval v0.0.1
 	github.com/gin-gonic/gin v1.12.0
 	github.com/gofiber/fiber/v2 v2.52.14
 	github.com/paulmach/orb v0.13.0
