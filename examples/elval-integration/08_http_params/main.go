@@ -1,5 +1,7 @@
 package main
 
+//go:generate go run github.com/arkannsk/nooa/cmd/clientgen -pkg . -out ../../../examples/elval-integration/clients/08_http_params/
+
 import (
 	"encoding/json"
 	"log"

@@ -1,5 +1,6 @@
-.PHONY: test gen install swagger-ui vacuum
+.PHONY: test gen install swagger-ui redoc clean
 
+ROOT := $(shell pwd)
 SWAGGER_VERSION := v5.17.14
 SWAGGER_URL := https://github.com/swagger-api/swagger-ui/archive/refs/tags/$(SWAGGER_VERSION).tar.gz
 SWAGGER_TMP_DIR := /tmp/swagger-ui-dist
@@ -9,16 +10,11 @@ REDOC_VERSION := v2.5.3
 REDOC_URL := https://cdn.redoc.ly/redoc/$(REDOC_VERSION)/bundles/redoc.standalone.js
 REDOC_DEST_DIR := static/redoc
 
-SCALAR_DEST_DIR := static/scalar
-
 install:
 	GOPROXY=direct go install github.com/arkannsk/elval/cmd/elval-gen@latest
 
 gen: install
 	go generate ./...
-
-gen-spec: install
-	elval-gen gen -i ./examples -openapi
 
 # Запуск всех тестов
 test:
@@ -27,11 +23,6 @@ test:
 clean:
 	@find ./ -name "*.gen.go" -delete
 	@find ./ -name "*.debug.go" -delete
-
-# Vacuum-валидация OpenAPI спецификаций для примеров elval-integration.
-# Поднимает каждый сервер по очереди, скачивает openapi.json, проверяет vacuum, убивает сервер.
-vacuum: gen-spec
-	@bash scripts/vacuum-check.sh
 
 swagger-ui:
 	@echo "Downloading Swagger UI $(SWAGGER_VERSION)..."
@@ -66,7 +57,6 @@ redoc:
 	@curl -sL $(REDOC_URL) -o $(REDOC_DEST_DIR)/redoc.standalone.js
 	@printf '<!DOCTYPE html>\n<html>\n<head>\n  <meta charset="UTF-8">\n  <title>API Documentation</title>\n  <style>\n    body { margin: 0; padding: 0; }\n  </style>\n</head>\n<body>\n  <redoc spec-url="{{SPEC_URL}}"></redoc>\n  <script src="./redoc.standalone.js"></script>\n</body>\n</html>\n' > $(REDOC_DEST_DIR)/index.html
 	@echo "Redoc installed successfully!"
-	@echo "IMPORTANT: Restart your Go server to embed changes."
 
 scalar:
 	@echo "Downloading Scalar..."
